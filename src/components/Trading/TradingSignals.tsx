@@ -149,8 +149,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
       const rsi = calculateRSI(data.previousPrices);
       const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
       const bollinger = calculateBollingerBands(data.previousPrices);
+      const priceAction = analyzePriceAction(data.previousPrices);
 
       // RSI Analysis
       if (rsi < 30) {

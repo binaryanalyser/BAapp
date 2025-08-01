@@ -341,7 +341,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     }
   };
 
-  const currentPrice = currentTick?.tick || 0;
   const currentPrice = currentTick?.price || 0;
   const decimals = getDecimalPlaces(selectedSymbol);
   const currentDigit = currentPrice ? getLastDigit(currentPrice, decimals) : 0;

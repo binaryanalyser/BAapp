@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, TrendingUp, TrendingDown, Activity, AlertCircle, Target, BarChart3, Zap, Play, DollarSign, Clock } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, Activity, AlertCircle, Target, BarChart3, Zap, Play, DollarSign, Clock, Signal, Cpu } from 'lucide-react';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { derivAPI } from '../../services/derivAPI';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,6 +15,8 @@ interface TechnicalIndicator {
   signal: 'BUY' | 'SELL' | 'NEUTRAL';
   strength: 'STRONG' | 'MODERATE' | 'WEAK';
   description: string;
+  confidence: number;
+  timeframe: string;
 }
 
 interface MarketSentiment {
@@ -29,6 +31,24 @@ interface PriceLevel {
   level: number;
   strength: 'STRONG' | 'MODERATE' | 'WEAK';
   distance: number;
+}
+
+interface PriceHistory {
+  prices: number[];
+  timestamps: number[];
+  volumes: number[];
+}
+
+interface AISignal {
+  action: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  reasoning: string;
+  timeframe: string;
+  entryPrice: number;
+  targetPrice?: number;
+  stopLoss?: number;
+  riskReward: number;
+  indicators: string[];
 }
 
 const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
@@ -50,7 +70,14 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
     confidence: number;
     reasoning: string;
     timeframe: string;
+    entryPrice: number;
+    targetPrice?: number;
+    stopLoss?: number;
+    riskReward: number;
+    indicators: string[];
   } | null>(null);
+  const [priceHistory, setPriceHistory] = useState<PriceHistory>({ prices: [], timestamps: [], volumes: [] });
+  const [isCollectingData, setIsCollectingData] = useState(true);
   
   // Quick Trade states
   const [selectedContract, setSelectedContract] = useState('CALL');
@@ -62,6 +89,29 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const [barrier, setBarrier] = useState<string>('0');
 
   const currentPrice = ticks[selectedAsset]?.price || 0;
+
+  // Collect price history for analysis
+  useEffect(() => {
+    if (currentPrice > 0) {
+      const now = Date.now();
+      setPriceHistory(prev => {
+        const newPrices = [...prev.prices, currentPrice].slice(-200); // Keep last 200 prices
+        const newTimestamps = [...prev.timestamps, now].slice(-200);
+        const newVolumes = [...prev.volumes, Math.random() * 100 + 50].slice(-200); // Mock volume data
+        
+        return {
+          prices: newPrices,
+          timestamps: newTimestamps,
+          volumes: newVolumes
+        };
+      });
+      
+      // Need at least 50 data points for reliable analysis
+      if (priceHistory.prices.length >= 50) {
+        setIsCollectingData(false);
+      }
+    }
+  }, [currentPrice]);
 
   // Calculate potential payout and profit
   const potentialPayout = parseFloat(String(amount || '0')) * 1.85;
@@ -155,99 +205,358 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
     }
   }, [countdown]);
 
-  // Generate realistic technical analysis
-  const generateTechnicalAnalysis = () => {
-    const indicators: TechnicalIndicator[] = [
-      {
-        name: 'RSI (14)',
-        value: Math.random() * 100,
-        signal: 'NEUTRAL',
-        strength: 'MODERATE',
-        description: 'Relative Strength Index indicates momentum'
-      },
-      {
-        name: 'MACD',
-        value: (Math.random() - 0.5) * 0.002,
-        signal: 'NEUTRAL',
-        strength: 'MODERATE',
-        description: 'Moving Average Convergence Divergence'
-      },
-      {
-        name: 'Bollinger Bands',
-        value: Math.random(),
-        signal: 'NEUTRAL',
-        strength: 'WEAK',
-        description: 'Price volatility and trend analysis'
-      },
-      {
-        name: 'Stochastic',
-        value: Math.random() * 100,
-        signal: 'NEUTRAL',
-        strength: 'MODERATE',
-        description: 'Momentum oscillator comparing closing price'
-      },
-      {
-        name: 'Williams %R',
-        value: Math.random() * -100,
-        signal: 'NEUTRAL',
-        strength: 'WEAK',
-        description: 'Momentum indicator measuring overbought/oversold'
-      }
-    ];
+  // Advanced Technical Analysis Functions
+  const calculateSMA = (prices: number[], period: number): number => {
+    if (prices.length < period) return 0;
+    const slice = prices.slice(-period);
+    return slice.reduce((sum, price) => sum + price, 0) / period;
+  };
 
-    // Apply realistic logic to indicators
-    indicators.forEach(indicator => {
-      switch (indicator.name) {
-        case 'RSI (14)':
-          if (indicator.value < 30) {
-            indicator.signal = 'BUY';
-            indicator.strength = 'STRONG';
-          } else if (indicator.value > 70) {
-            indicator.signal = 'SELL';
-            indicator.strength = 'STRONG';
-          } else if (indicator.value < 40) {
-            indicator.signal = 'BUY';
-            indicator.strength = 'MODERATE';
-          } else if (indicator.value > 60) {
-            indicator.signal = 'SELL';
-            indicator.strength = 'MODERATE';
-          }
-          break;
-        
-        case 'MACD':
-          if (indicator.value > 0.0005) {
-            indicator.signal = 'BUY';
-            indicator.strength = 'MODERATE';
-          } else if (indicator.value < -0.0005) {
-            indicator.signal = 'SELL';
-            indicator.strength = 'MODERATE';
-          }
-          break;
-        
-        case 'Stochastic':
-          if (indicator.value < 20) {
-            indicator.signal = 'BUY';
-            indicator.strength = 'MODERATE';
-          } else if (indicator.value > 80) {
-            indicator.signal = 'SELL';
-            indicator.strength = 'MODERATE';
-          }
-          break;
-      }
+  const calculateEMA = (prices: number[], period: number): number => {
+    if (prices.length < period) return 0;
+    
+    const multiplier = 2 / (period + 1);
+    let ema = prices[0];
+    
+    for (let i = 1; i < prices.length; i++) {
+      ema = (prices[i] * multiplier) + (ema * (1 - multiplier));
+    }
+    
+    return ema;
+  };
+
+  const calculateRSI = (prices: number[], period: number = 14): number => {
+    if (prices.length < period + 1) return 50;
+    
+    let gains = 0;
+    let losses = 0;
+    
+    for (let i = prices.length - period; i < prices.length; i++) {
+      const change = prices[i] - prices[i - 1];
+      if (change > 0) gains += change;
+      else losses -= change;
+    }
+    
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  };
+
+  const calculateMACD = (prices: number[]): { macd: number; signal: number; histogram: number } => {
+    if (prices.length < 26) return { macd: 0, signal: 0, histogram: 0 };
+    
+    const ema12 = calculateEMA(prices, 12);
+    const ema26 = calculateEMA(prices, 26);
+    const macd = ema12 - ema26;
+    
+    // Calculate signal line (9-period EMA of MACD)
+    const macdHistory = [];
+    for (let i = 26; i <= prices.length; i++) {
+      const slice = prices.slice(0, i);
+      const ema12_temp = calculateEMA(slice, 12);
+      const ema26_temp = calculateEMA(slice, 26);
+      macdHistory.push(ema12_temp - ema26_temp);
+    }
+    
+    const signal = calculateEMA(macdHistory, 9);
+    const histogram = macd - signal;
+    
+    return { macd, signal, histogram };
+  };
+
+  const calculateBollingerBands = (prices: number[], period: number = 20, stdDev: number = 2): { upper: number; middle: number; lower: number; squeeze: boolean } => {
+    if (prices.length < period) return { upper: 0, middle: 0, lower: 0, squeeze: false };
+    
+    const sma = calculateSMA(prices, period);
+    const slice = prices.slice(-period);
+    
+    const variance = slice.reduce((sum, price) => sum + Math.pow(price - sma, 2), 0) / period;
+    const standardDeviation = Math.sqrt(variance);
+    
+    const upper = sma + (standardDeviation * stdDev);
+    const lower = sma - (standardDeviation * stdDev);
+    const bandWidth = (upper - lower) / sma;
+    const squeeze = bandWidth < 0.001; // Tight squeeze threshold
+    
+    return { upper, middle: sma, lower, squeeze };
+  };
+
+  const calculateStochastic = (prices: number[], period: number = 14): { k: number; d: number } => {
+    if (prices.length < period) return { k: 50, d: 50 };
+    
+    const slice = prices.slice(-period);
+    const highest = Math.max(...slice);
+    const lowest = Math.min(...slice);
+    const current = prices[prices.length - 1];
+    
+    const k = ((current - lowest) / (highest - lowest)) * 100;
+    
+    // Calculate %D (3-period SMA of %K)
+    const kValues = [];
+    for (let i = period; i <= prices.length; i++) {
+      const tempSlice = prices.slice(i - period, i);
+      const tempHighest = Math.max(...tempSlice);
+      const tempLowest = Math.min(...tempSlice);
+      const tempCurrent = prices[i - 1];
+      kValues.push(((tempCurrent - tempLowest) / (tempHighest - tempLowest)) * 100);
+    }
+    
+    const d = kValues.slice(-3).reduce((sum, val) => sum + val, 0) / Math.min(3, kValues.length);
+    
+    return { k, d };
+  };
+
+  const calculateWilliamsR = (prices: number[], period: number = 14): number => {
+    if (prices.length < period) return -50;
+    
+    const slice = prices.slice(-period);
+    const highest = Math.max(...slice);
+    const lowest = Math.min(...slice);
+    const current = prices[prices.length - 1];
+    
+    return ((highest - current) / (highest - lowest)) * -100;
+  };
+
+  const detectPricePatterns = (prices: number[]): { pattern: string; confidence: number; signal: 'BUY' | 'SELL' | 'NEUTRAL' } => {
+    if (prices.length < 10) return { pattern: 'Insufficient Data', confidence: 0, signal: 'NEUTRAL' };
+    
+    const recent = prices.slice(-10);
+    const current = recent[recent.length - 1];
+    const previous = recent[recent.length - 2];
+    
+    // Double Bottom Pattern
+    const lows = recent.filter((price, i) => i > 0 && i < recent.length - 1 && price < recent[i-1] && price < recent[i+1]);
+    if (lows.length >= 2 && Math.abs(lows[0] - lows[1]) / lows[0] < 0.002) {
+      return { pattern: 'Double Bottom', confidence: 75, signal: 'BUY' };
+    }
+    
+    // Double Top Pattern
+    const highs = recent.filter((price, i) => i > 0 && i < recent.length - 1 && price > recent[i-1] && price > recent[i+1]);
+    if (highs.length >= 2 && Math.abs(highs[0] - highs[1]) / highs[0] < 0.002) {
+      return { pattern: 'Double Top', confidence: 75, signal: 'SELL' };
+    }
+    
+    // Ascending Triangle
+    const isAscending = recent.slice(0, -2).every((price, i) => i === 0 || price >= recent[i-1]);
+    if (isAscending && current > previous) {
+      return { pattern: 'Ascending Triangle', confidence: 65, signal: 'BUY' };
+    }
+    
+    // Descending Triangle
+    const isDescending = recent.slice(0, -2).every((price, i) => i === 0 || price <= recent[i-1]);
+    if (isDescending && current < previous) {
+      return { pattern: 'Descending Triangle', confidence: 65, signal: 'SELL' };
+    }
+    
+    return { pattern: 'No Clear Pattern', confidence: 0, signal: 'NEUTRAL' };
+  };
+
+  // Generate advanced technical analysis
+  const generateTechnicalAnalysis = (): TechnicalIndicator[] => {
+    if (priceHistory.prices.length < 50) {
+      return [];
+    }
+
+    const prices = priceHistory.prices;
+    const indicators: TechnicalIndicator[] = [];
+    
+    // RSI Analysis
+    const rsi = calculateRSI(prices);
+    let rsiSignal: 'BUY' | 'SELL' | 'NEUTRAL' = 'NEUTRAL';
+    let rsiStrength: 'STRONG' | 'MODERATE' | 'WEAK' = 'WEAK';
+    let rsiConfidence = 50;
+    
+    if (rsi < 25) {
+      rsiSignal = 'BUY';
+      rsiStrength = 'STRONG';
+      rsiConfidence = 85;
+    } else if (rsi < 35) {
+      rsiSignal = 'BUY';
+      rsiStrength = 'MODERATE';
+      rsiConfidence = 70;
+    } else if (rsi > 75) {
+      rsiSignal = 'SELL';
+      rsiStrength = 'STRONG';
+      rsiConfidence = 85;
+    } else if (rsi > 65) {
+      rsiSignal = 'SELL';
+      rsiStrength = 'MODERATE';
+      rsiConfidence = 70;
+    }
+    
+    indicators.push({
+      name: 'RSI (14)',
+      value: rsi,
+      signal: rsiSignal,
+      strength: rsiStrength,
+      description: `RSI at ${rsi.toFixed(1)} indicates ${rsi < 30 ? 'oversold' : rsi > 70 ? 'overbought' : 'neutral'} conditions`,
+      confidence: rsiConfidence,
+      timeframe: '5-15 minutes'
     });
+    
+    // MACD Analysis
+    const macdData = calculateMACD(prices);
+    let macdSignal: 'BUY' | 'SELL' | 'NEUTRAL' = 'NEUTRAL';
+    let macdStrength: 'STRONG' | 'MODERATE' | 'WEAK' = 'WEAK';
+    let macdConfidence = 50;
+    
+    if (macdData.macd > macdData.signal && macdData.histogram > 0) {
+      macdSignal = 'BUY';
+      macdStrength = Math.abs(macdData.histogram) > 0.001 ? 'STRONG' : 'MODERATE';
+      macdConfidence = macdStrength === 'STRONG' ? 80 : 65;
+    } else if (macdData.macd < macdData.signal && macdData.histogram < 0) {
+      macdSignal = 'SELL';
+      macdStrength = Math.abs(macdData.histogram) > 0.001 ? 'STRONG' : 'MODERATE';
+      macdConfidence = macdStrength === 'STRONG' ? 80 : 65;
+    }
+    
+    indicators.push({
+      name: 'MACD',
+      value: macdData.macd,
+      signal: macdSignal,
+      strength: macdStrength,
+      description: `MACD ${macdData.macd > macdData.signal ? 'above' : 'below'} signal line with ${macdData.histogram > 0 ? 'positive' : 'negative'} histogram`,
+      confidence: macdConfidence,
+      timeframe: '10-30 minutes'
+    });
+    
+    // Bollinger Bands Analysis
+    const bb = calculateBollingerBands(prices);
+    const currentPrice = prices[prices.length - 1];
+    let bbSignal: 'BUY' | 'SELL' | 'NEUTRAL' = 'NEUTRAL';
+    let bbStrength: 'STRONG' | 'MODERATE' | 'WEAK' = 'WEAK';
+    let bbConfidence = 50;
+    
+    const upperDistance = (bb.upper - currentPrice) / currentPrice;
+    const lowerDistance = (currentPrice - bb.lower) / currentPrice;
+    
+    if (currentPrice <= bb.lower && !bb.squeeze) {
+      bbSignal = 'BUY';
+      bbStrength = lowerDistance > 0.002 ? 'STRONG' : 'MODERATE';
+      bbConfidence = bbStrength === 'STRONG' ? 75 : 60;
+    } else if (currentPrice >= bb.upper && !bb.squeeze) {
+      bbSignal = 'SELL';
+      bbStrength = upperDistance > 0.002 ? 'STRONG' : 'MODERATE';
+      bbConfidence = bbStrength === 'STRONG' ? 75 : 60;
+    } else if (bb.squeeze) {
+      bbSignal = 'NEUTRAL';
+      bbStrength = 'MODERATE';
+      bbConfidence = 70; // High confidence in volatility breakout coming
+    }
+    
+    indicators.push({
+      name: 'Bollinger Bands',
+      value: (currentPrice - bb.lower) / (bb.upper - bb.lower),
+      signal: bbSignal,
+      strength: bbStrength,
+      description: bb.squeeze ? 'Bollinger squeeze detected - breakout imminent' : `Price ${currentPrice < bb.lower ? 'below lower' : currentPrice > bb.upper ? 'above upper' : 'within'} bands`,
+      confidence: bbConfidence,
+      timeframe: '5-20 minutes'
+    });
+    
+    // Stochastic Analysis
+    const stoch = calculateStochastic(prices);
+    let stochSignal: 'BUY' | 'SELL' | 'NEUTRAL' = 'NEUTRAL';
+    let stochStrength: 'STRONG' | 'MODERATE' | 'WEAK' = 'WEAK';
+    let stochConfidence = 50;
+    
+    if (stoch.k < 20 && stoch.d < 20 && stoch.k > stoch.d) {
+      stochSignal = 'BUY';
+      stochStrength = 'STRONG';
+      stochConfidence = 75;
+    } else if (stoch.k > 80 && stoch.d > 80 && stoch.k < stoch.d) {
+      stochSignal = 'SELL';
+      stochStrength = 'STRONG';
+      stochConfidence = 75;
+    } else if (stoch.k < 30) {
+      stochSignal = 'BUY';
+      stochStrength = 'MODERATE';
+      stochConfidence = 60;
+    } else if (stoch.k > 70) {
+      stochSignal = 'SELL';
+      stochStrength = 'MODERATE';
+      stochConfidence = 60;
+    }
+    
+    indicators.push({
+      name: 'Stochastic',
+      value: stoch.k,
+      signal: stochSignal,
+      strength: stochStrength,
+      description: `Stochastic %K at ${stoch.k.toFixed(1)}, %D at ${stoch.d.toFixed(1)} - ${stoch.k < 20 ? 'oversold' : stoch.k > 80 ? 'overbought' : 'neutral'}`,
+      confidence: stochConfidence,
+      timeframe: '3-10 minutes'
+    });
+    
+    // Williams %R Analysis
+    const williamsR = calculateWilliamsR(prices);
+    let wrSignal: 'BUY' | 'SELL' | 'NEUTRAL' = 'NEUTRAL';
+    let wrStrength: 'STRONG' | 'MODERATE' | 'WEAK' = 'WEAK';
+    let wrConfidence = 50;
+    
+    if (williamsR < -80) {
+      wrSignal = 'BUY';
+      wrStrength = williamsR < -90 ? 'STRONG' : 'MODERATE';
+      wrConfidence = wrStrength === 'STRONG' ? 70 : 55;
+    } else if (williamsR > -20) {
+      wrSignal = 'SELL';
+      wrStrength = williamsR > -10 ? 'STRONG' : 'MODERATE';
+      wrConfidence = wrStrength === 'STRONG' ? 70 : 55;
+    }
+    
+    indicators.push({
+      name: 'Williams %R',
+      value: williamsR,
+      signal: wrSignal,
+      strength: wrStrength,
+      description: `Williams %R at ${williamsR.toFixed(1)} indicates ${williamsR < -80 ? 'oversold' : williamsR > -20 ? 'overbought' : 'neutral'} momentum`,
+      confidence: wrConfidence,
+      timeframe: '5-15 minutes'
+    });
+
 
     return indicators;
   };
 
   // Generate market sentiment
-  const generateMarketSentiment = (): MarketSentiment => {
-    const bullish = Math.random() * 100;
-    const bearish = Math.random() * (100 - bullish);
-    const neutral = 100 - bullish - bearish;
+  const generateMarketSentiment = (indicators: TechnicalIndicator[]): MarketSentiment => {
+    if (indicators.length === 0) {
+      return { bullish: 33, bearish: 33, neutral: 34, overall: 'NEUTRAL' };
+    }
+    
+    const buySignals = indicators.filter(i => i.signal === 'BUY');
+    const sellSignals = indicators.filter(i => i.signal === 'SELL');
+    const neutralSignals = indicators.filter(i => i.signal === 'NEUTRAL');
+    
+    // Weight by confidence and strength
+    const buyWeight = buySignals.reduce((sum, ind) => {
+      const strengthMultiplier = ind.strength === 'STRONG' ? 1.5 : ind.strength === 'MODERATE' ? 1.2 : 1;
+      return sum + (ind.confidence * strengthMultiplier);
+    }, 0);
+    
+    const sellWeight = sellSignals.reduce((sum, ind) => {
+      const strengthMultiplier = ind.strength === 'STRONG' ? 1.5 : ind.strength === 'MODERATE' ? 1.2 : 1;
+      return sum + (ind.confidence * strengthMultiplier);
+    }, 0);
+    
+    const neutralWeight = neutralSignals.reduce((sum, ind) => sum + ind.confidence, 0);
+    
+    const totalWeight = buyWeight + sellWeight + neutralWeight;
+    
+    if (totalWeight === 0) {
+      return { bullish: 33, bearish: 33, neutral: 34, overall: 'NEUTRAL' };
+    }
+    
+    const bullish = (buyWeight / totalWeight) * 100;
+    const bearish = (sellWeight / totalWeight) * 100;
+    const neutral = (neutralWeight / totalWeight) * 100;
 
     let overall: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
-    if (bullish > 50) overall = 'BULLISH';
-    else if (bearish > 40) overall = 'BEARISH';
+    if (bullish > 45 && bullish > bearish + 10) overall = 'BULLISH';
+    else if (bearish > 45 && bearish > bullish + 10) overall = 'BEARISH';
 
     return { bullish, bearish, neutral, overall };
   };
@@ -284,34 +593,114 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   };
 
   // Generate AI recommendation
-  const generateAIRecommendation = (indicators: TechnicalIndicator[], sentiment: MarketSentiment) => {
-    const buySignals = indicators.filter(i => i.signal === 'BUY').length;
-    const sellSignals = indicators.filter(i => i.signal === 'SELL').length;
-    const strongSignals = indicators.filter(i => i.strength === 'STRONG').length;
+  const generateAIRecommendation = (indicators: TechnicalIndicator[], sentiment: MarketSentiment, patterns: any) => {
+    if (indicators.length === 0) return null;
+    
+    const buySignals = indicators.filter(i => i.signal === 'BUY');
+    const sellSignals = indicators.filter(i => i.signal === 'SELL');
+    const strongSignals = indicators.filter(i => i.strength === 'STRONG');
+    
+    // Calculate weighted confidence based on indicator strength and confidence
+    const buyConfidence = buySignals.reduce((sum, ind) => {
+      const strengthWeight = ind.strength === 'STRONG' ? 1.5 : ind.strength === 'MODERATE' ? 1.2 : 1;
+      return sum + (ind.confidence * strengthWeight);
+    }, 0) / Math.max(buySignals.length, 1);
+    
+    const sellConfidence = sellSignals.reduce((sum, ind) => {
+      const strengthWeight = ind.strength === 'STRONG' ? 1.5 : ind.strength === 'MODERATE' ? 1.2 : 1;
+      return sum + (ind.confidence * strengthWeight);
+    }, 0) / Math.max(sellSignals.length, 1);
 
     let action: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
     let confidence = 50;
-    let reasoning = 'Mixed signals suggest a cautious approach';
-    let timeframe = '5-15 minutes';
+    let reasoning = 'Insufficient data or mixed signals suggest waiting for clearer direction';
+    let timeframe = '5-10 minutes';
+    let entryPrice = currentPrice;
+    let targetPrice: number | undefined;
+    let stopLoss: number | undefined;
+    let riskReward = 1.0;
+    let activeIndicators: string[] = [];
 
-    if (buySignals > sellSignals && sentiment.overall === 'BULLISH') {
+    // Pattern analysis bonus
+    let patternBonus = 0;
+    if (patterns.confidence > 60) {
+      patternBonus = patterns.confidence * 0.3;
+      if (patterns.signal === 'BUY') buyConfidence += patternBonus;
+      if (patterns.signal === 'SELL') sellConfidence += patternBonus;
+    }
+    
+    if (buySignals.length > sellSignals.length && buyConfidence > sellConfidence) {
       action = 'BUY';
-      confidence = Math.min(95, 60 + (buySignals * 10) + (strongSignals * 5) + (sentiment.bullish * 0.3));
-      reasoning = `${buySignals} bullish indicators with ${sentiment.bullish.toFixed(0)}% market sentiment support upward movement`;
-      timeframe = confidence > 80 ? '3-5 minutes' : '5-10 minutes';
-    } else if (sellSignals > buySignals && sentiment.overall === 'BEARISH') {
+      confidence = Math.min(95, buyConfidence + (strongSignals.filter(s => s.signal === 'BUY').length * 5));
+      
+      const buyIndicatorNames = buySignals.map(i => i.name);
+      activeIndicators = buyIndicatorNames;
+      
+      reasoning = `${buySignals.length} bullish indicator${buySignals.length > 1 ? 's' : ''} (${buyIndicatorNames.join(', ')}) with ${sentiment.bullish.toFixed(0)}% market sentiment`;
+      if (patterns.pattern !== 'No Clear Pattern') {
+        reasoning += ` + ${patterns.pattern} pattern detected`;
+      }
+      
+      timeframe = confidence > 85 ? '2-5 minutes' : confidence > 70 ? '5-10 minutes' : '10-15 minutes';
+      targetPrice = currentPrice * 1.002; // 0.2% target
+      stopLoss = currentPrice * 0.9985; // 0.15% stop loss
+      riskReward = (targetPrice - currentPrice) / (currentPrice - stopLoss);
+      
+    } else if (sellSignals.length > buySignals.length && sellConfidence > buyConfidence) {
       action = 'SELL';
-      confidence = Math.min(95, 60 + (sellSignals * 10) + (strongSignals * 5) + (sentiment.bearish * 0.3));
-      reasoning = `${sellSignals} bearish indicators with ${sentiment.bearish.toFixed(0)}% market sentiment suggest downward pressure`;
-      timeframe = confidence > 80 ? '3-5 minutes' : '5-10 minutes';
-    } else if (strongSignals >= 2) {
-      action = buySignals > sellSignals ? 'BUY' : 'SELL';
-      confidence = Math.min(85, 65 + (strongSignals * 8));
-      reasoning = `${strongSignals} strong technical signals provide clear direction despite mixed sentiment`;
-      timeframe = '5-15 minutes';
+      confidence = Math.min(95, sellConfidence + (strongSignals.filter(s => s.signal === 'SELL').length * 5));
+      
+      const sellIndicatorNames = sellSignals.map(i => i.name);
+      activeIndicators = sellIndicatorNames;
+      
+      reasoning = `${sellSignals.length} bearish indicator${sellSignals.length > 1 ? 's' : ''} (${sellIndicatorNames.join(', ')}) with ${sentiment.bearish.toFixed(0)}% market sentiment`;
+      if (patterns.pattern !== 'No Clear Pattern') {
+        reasoning += ` + ${patterns.pattern} pattern detected`;
+      }
+      
+      timeframe = confidence > 85 ? '2-5 minutes' : confidence > 70 ? '5-10 minutes' : '10-15 minutes';
+      targetPrice = currentPrice * 0.998; // 0.2% target
+      stopLoss = currentPrice * 1.0015; // 0.15% stop loss
+      riskReward = (currentPrice - targetPrice) / (stopLoss - currentPrice);
+      
+    } else if (strongSignals.length >= 2) {
+      const strongBuySignals = strongSignals.filter(s => s.signal === 'BUY');
+      const strongSellSignals = strongSignals.filter(s => s.signal === 'SELL');
+      
+      if (strongBuySignals.length > strongSellSignals.length) {
+        action = 'BUY';
+        activeIndicators = strongBuySignals.map(i => i.name);
+        targetPrice = currentPrice * 1.0015;
+        stopLoss = currentPrice * 0.999;
+      } else if (strongSellSignals.length > strongBuySignals.length) {
+        action = 'SELL';
+        activeIndicators = strongSellSignals.map(i => i.name);
+        targetPrice = currentPrice * 0.9985;
+        stopLoss = currentPrice * 1.001;
+      }
+      
+      confidence = Math.min(90, 70 + (strongSignals.length * 5));
+      reasoning = `${strongSignals.length} strong technical signals (${activeIndicators.join(', ')}) provide clear direction`;
+      timeframe = '3-8 minutes';
+      riskReward = targetPrice ? Math.abs((targetPrice - currentPrice) / (stopLoss! - currentPrice)) : 1.0;
     }
 
-    return { action, confidence, reasoning, timeframe };
+    // Adjust confidence based on market conditions
+    if (sentiment.overall === action.replace('BUY', 'BULLISH').replace('SELL', 'BEARISH')) {
+      confidence = Math.min(95, confidence + 5);
+    }
+    
+    return { 
+      action, 
+      confidence, 
+      reasoning, 
+      timeframe, 
+      entryPrice,
+      targetPrice,
+      stopLoss,
+      riskReward,
+      indicators: activeIndicators
+    };
   };
 
   // Perform analysis
@@ -320,9 +709,10 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
     
     setTimeout(() => {
       const indicators = generateTechnicalAnalysis();
-      const sentiment = generateMarketSentiment();
+      const sentiment = generateMarketSentiment(indicators);
       const levels = generatePriceLevels(currentPrice);
-      const recommendation = generateAIRecommendation(indicators, sentiment);
+      const patterns = detectPricePatterns(priceHistory.prices);
+      const recommendation = generateAIRecommendation(indicators, sentiment, patterns);
 
       setTechnicalIndicators(indicators);
       setMarketSentiment(sentiment);
@@ -330,15 +720,21 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       setAiRecommendation(recommendation);
       setLastAnalysis(Date.now());
       setIsAnalyzing(false);
-    }, 2000);
+    }, 1500);
   };
 
   // Auto-analyze when asset changes or every 30 seconds
   useEffect(() => {
-    performAnalysis();
-    const interval = setInterval(performAnalysis, 30000);
+    if (!isCollectingData && priceHistory.prices.length >= 50) {
+      performAnalysis();
+    }
+    const interval = setInterval(() => {
+      if (!isCollectingData && priceHistory.prices.length >= 50) {
+        performAnalysis();
+      }
+    }, 15000); // More frequent updates
     return () => clearInterval(interval);
-  }, [selectedAsset, currentPrice]);
+  }, [selectedAsset, currentPrice, isCollectingData, priceHistory.prices.length]);
 
   const getSignalColor = (signal: string) => {
     switch (signal) {
@@ -370,6 +766,12 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
         <div className="flex items-center space-x-3">
           <Brain className="h-6 w-6 text-blue-400" />
           <h3 className="text-xl font-semibold text-white">AI Asset Analysis</h3>
+          {isCollectingData && (
+            <div className="flex items-center space-x-2">
+              <Cpu className="h-4 w-4 text-yellow-400 animate-pulse" />
+              <span className="text-sm text-yellow-400">Collecting data... ({priceHistory.prices.length}/50)</span>
+            </div>
+          )}
           {isAnalyzing && (
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
@@ -380,17 +782,37 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
         <div className="text-right">
           <div className="text-lg font-bold text-white">{selectedAsset}</div>
           <div className="text-sm text-gray-400">
-            Last: {new Date(lastAnalysis).toLocaleTimeString()}
+            {isCollectingData ? 'Initializing...' : `Last: ${new Date(lastAnalysis).toLocaleTimeString()}`}
           </div>
         </div>
       </div>
 
+      {isCollectingData && (
+        <div className="mb-6 bg-yellow-500/10 border border-yellow-500 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <Cpu className="h-5 w-5 text-yellow-400" />
+            <div>
+              <h4 className="text-yellow-400 font-medium">Initializing AI Analysis</h4>
+              <p className="text-sm text-gray-300 mt-1">
+                Collecting market data for accurate technical analysis. Need {50 - priceHistory.prices.length} more data points.
+              </p>
+              <div className="w-full bg-gray-700 rounded-full h-2 mt-2">
+                <div 
+                  className="h-2 rounded-full bg-yellow-400 transition-all duration-300"
+                  style={{ width: `${(priceHistory.prices.length / 50) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Recommendation */}
-      {aiRecommendation && (
+      {aiRecommendation && !isCollectingData && (
         <div className={`rounded-lg border-2 p-4 mb-6 ${getRecommendationColor(aiRecommendation.action)}`}>
           <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-3 space-y-3 lg:space-y-0">
             <div className="flex items-center space-x-3 flex-1">
-              <Target className="h-6 w-6 text-blue-400" />
+              <Signal className="h-6 w-6 text-blue-400" />
               <div>
                 <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
                   <span className="text-lg font-bold text-white">
@@ -399,8 +821,18 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
                   <span className="text-sm bg-gray-700 px-2 py-1 rounded w-fit">
                     {aiRecommendation.timeframe}
                   </span>
+                  <span className="text-sm bg-blue-600 px-2 py-1 rounded w-fit">
+                    R/R: {aiRecommendation.riskReward.toFixed(2)}
+                  </span>
                 </div>
                 <p className="text-sm text-gray-300 mt-1 max-w-none lg:max-w-md xl:max-w-lg">{aiRecommendation.reasoning}</p>
+                {aiRecommendation.targetPrice && aiRecommendation.stopLoss && (
+                  <div className="flex space-x-4 mt-2 text-xs text-gray-400">
+                    <span>Entry: {aiRecommendation.entryPrice.toFixed(4)}</span>
+                    <span className="text-green-400">Target: {aiRecommendation.targetPrice.toFixed(4)}</span>
+                    <span className="text-red-400">Stop: {aiRecommendation.stopLoss.toFixed(4)}</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="text-left lg:text-right flex-shrink-0">
@@ -585,9 +1017,9 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
         </div>
       </div>
 
-
       {/* Market Sentiment */}
-      <div className="mb-6">
+      {!isCollectingData && (
+        <div className="mb-6">
         <h4 className="text-lg font-medium text-white mb-4 flex items-center">
           <Activity className="h-4 w-4 mr-2 text-blue-400" />
           Market Sentiment

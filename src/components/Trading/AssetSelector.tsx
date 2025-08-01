@@ -20,7 +20,6 @@ const AssetSelector: React.FC<AssetSelectorProps> = ({ selectedAsset, onAssetCha
   const { ticks } = useWebSocket();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [favoriteAssets, setFavoriteAssets] = useState<string[]>(['R_10', 'R_25', 'R_50']);
   const [favoriteAssets, setFavoriteAssets] = useState<string[]>(['VIX10', 'VIX25', 'VIX50']);
 
   // Popular trading assets with categories

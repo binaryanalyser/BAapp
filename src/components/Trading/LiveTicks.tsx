@@ -82,12 +82,10 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     setConnectionStatus('connecting');
     console.log('Connecting to WebSocket...');
     
-    wsRef.current = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089&l=EN');
+    wsRef.current = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=88454&l=EN');
     
     wsRef.current.onopen = () => {
       console.log('WebSocket connected');
-      // Send initial ping to verify connection
-      wsRef.current?.send(JSON.stringify({ ping: 1 }));
       setIsConnected(true);
       setConnectionStatus('connected');
       setReconnectAttempts(0);
@@ -97,12 +95,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     wsRef.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log('WebSocket message:', data);
-      
-      // Handle ping response
-      if (data.pong) {
-        console.log('WebSocket ping successful');
-        return;
-      }
       
       if (data.tick && data.echo_req?.ticks === selectedSymbol) {
         console.log('Received tick for', selectedSymbol, ':', data.tick.tick);

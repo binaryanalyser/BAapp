@@ -5,15 +5,13 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 interface Signal {
   id: string;
   symbol: string;
-  recommendation: 'BUY' | 'SELL' | 'HOLD';
   type: 'CALL' | 'PUT' | 'MATCH' | 'DIFFER';
   strength: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   confidence: number;
   entry: number;
-  duration: number; // Duration in minutes
+  expiry: string;
   reasoning: string;
   timestamp: number;
-  expiresAt: number; // When this signal expires
   indicators: {
     rsi: number;
     macd: 'bullish' | 'bearish' | 'neutral';
@@ -25,7 +23,8 @@ interface Signal {
     momentum: number;
     volatility: number;
   };
-  remainingTime: number; // Remaining time in seconds
+  isLive: boolean;
+  countdown: number;
 }
 
 interface MarketData {
@@ -44,10 +43,10 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   const { ticks } = useWebSocket();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
-  const [analysisStatus, setAnalysisStatus] = useState<'waiting' | 'analyzing' | 'ready'>('waiting');
+  const [analysisStatus, setAnalysisStatus] = useState<'analyzing' | 'ready' | 'generating'>('analyzing');
   const [lastAnalysis, setLastAnalysis] = useState<number>(Date.now());
-  const [signalDuration, setSignalDuration] = useState<number>(15); // Duration in minutes
-  const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(Date.now() + 15 * 60 * 1000);
+  const [signalDuration, setSignalDuration] = useState<number>(5); // Duration in minutes
+  const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(Date.now() + 5 * 60 * 1000);
   const [analysisCountdown, setAnalysisCountdown] = useState<number>(0);
 
   // Advanced technical analysis functions
@@ -128,8 +127,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     const bollinger = calculateBollingerBands(previousPrices);
     const priceAction = analyzePriceAction(previousPrices);
     
-    // Determine recommendation and signal type
-    let recommendation: Signal['recommendation'] = 'HOLD';
+    // Advanced signal logic
     let signalType: Signal['type'] = 'CALL';
     let confidence = 50;
     let strength: Signal['strength'] = 'LOW';
@@ -137,34 +135,25 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     
     // RSI-based signals
     if (rsi < 30 && macd === 'bullish') {
-      recommendation = 'BUY';
       signalType = 'CALL';
       confidence += 25;
       reasoning = 'RSI oversold with bullish MACD divergence';
     } else if (rsi > 70 && macd === 'bearish') {
-      recommendation = 'SELL';
       signalType = 'PUT';
       confidence += 25;
       reasoning = 'RSI overbought with bearish MACD divergence';
-    } else if (rsi >= 45 && rsi <= 55 && macd === 'neutral') {
-      recommendation = 'HOLD';
-      confidence += 10;
-      reasoning = 'Market consolidation - wait for clearer signals';
     }
     
     // Bollinger Bands signals
     if (bollinger === 'squeeze' && priceAction.volatility > 0.002) {
       confidence += 20;
       reasoning += ' + Bollinger squeeze breakout imminent';
-      if (recommendation === 'HOLD') {
-        recommendation = priceAction.trend === 'uptrend' ? 'BUY' : 'SELL';
-      }
     }
     
     // Price action confirmation
-    if (priceAction.trend === 'uptrend' && recommendation === 'BUY') {
+    if (priceAction.trend === 'uptrend' && signalType === 'CALL') {
       confidence += 15;
-    } else if (priceAction.trend === 'downtrend' && recommendation === 'SELL') {
+    } else if (priceAction.trend === 'downtrend' && signalType === 'PUT') {
       confidence += 15;
     }
     
@@ -190,23 +179,18 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     else strength = 'LOW';
     
     // Only generate signals with reasonable confidence
-    if (confidence < 55) return null;
-    
-    const now = Date.now();
-    const durationMs = signalDuration * 60 * 1000;
+    if (confidence < 60) return null;
     
     return {
       id: `${symbol}-${Date.now()}-${Math.random()}`,
       symbol,
-      recommendation,
       type: signalType,
       strength,
       confidence: Math.min(confidence, 95),
       entry: currentPrice,
-      duration: signalDuration,
+      expiry: strength === 'CRITICAL' ? '3m' : strength === 'HIGH' ? '5m' : '10m',
       reasoning,
       timestamp: Date.now(),
-      expiresAt: now + durationMs,
       indicators: {
         rsi: Math.round(rsi),
         macd,
@@ -214,9 +198,10 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         volume: data.volume > 1.5 ? 'high' : data.volume > 0.8 ? 'normal' : 'low'
       },
       priceAction,
-      remainingTime: Math.floor(durationMs / 1000)
+      isLive: true,
+      countdown: strength === 'CRITICAL' ? 180 : strength === 'HIGH' ? 300 : 600
     };
-  }, [calculateRSI, calculateMACD, calculateBollingerBands, analyzePriceAction, signalDuration]);
+  }, [calculateRSI, calculateMACD, calculateBollingerBands, analyzePriceAction]);
 
   // Update market data and generate signals
   useEffect(() => {
@@ -259,12 +244,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         return;
       }
       
-      // Clear existing signals when starting new analysis
-      setSignals([]);
       setAnalysisStatus('analyzing');
-      
-      // Simulate analysis time
-      const analysisDelay = 2000 + Math.random() * 1000; // 2-3 seconds
       
       setTimeout(() => {
         // Prioritize selected asset for signal generation
@@ -272,43 +252,40 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
           ? [selectedAsset, ...Object.keys(marketData).filter(s => s !== selectedAsset)]
           : Object.keys(marketData);
 
-        const newSignals: Signal[] = [];
-        
-        symbolsToAnalyze.slice(0, 3).forEach((symbol) => { // Limit to 3 symbols
+        symbolsToAnalyze.forEach((symbol, index) => {
           const data = marketData[symbol];
           if (!data) return;
 
-          // Higher chance for selected asset
-          const generationChance = symbol === selectedAsset ? 0.9 : 0.4;
+          // Higher chance for selected asset, lower for others
+          const generationChance = symbol === selectedAsset ? 0.7 : 0.15;
           
           if (Math.random() > (1 - generationChance)) {
             const signal = generateAdvancedSignal(symbol, data.price, data);
             if (signal) {
-              newSignals.push(signal);
+              setSignals(prev => {
+                const filtered = prev.filter(s => 
+                  (s.symbol !== symbol || Date.now() - s.timestamp > 30000) &&
+                  Date.now() - s.timestamp < 300000 // Keep signals for 5 minutes max
+                );
+                return [signal, ...filtered].slice(0, 8);
+              });
             }
           }
         });
         
-        setSignals(newSignals);
         setAnalysisStatus('ready');
         setLastAnalysis(Date.now());
         
         // Set next analysis time based on selected duration
         const nextTime = Date.now() + (signalDuration * 60 * 1000);
         setNextAnalysisTime(nextTime);
-      }, analysisDelay);
+      }, 1500);
     };
 
-    // Check every 10 seconds if it's time to analyze
-    const interval = setInterval(generateSignals, 10000);
-    
-    // Run initial analysis if no signals exist
-    if (signals.length === 0 && Object.keys(marketData).length > 0) {
-      generateSignals();
-    }
-    
+    // Check every 5 seconds if it's time to analyze
+    const interval = setInterval(generateSignals, 5000);
     return () => clearInterval(interval);
-  }, [marketData, generateAdvancedSignal, selectedAsset, signalDuration, nextAnalysisTime, signals.length]);
+  }, [marketData, generateAdvancedSignal, selectedAsset, signalDuration, nextAnalysisTime]);
 
   // Update analysis countdown
   useEffect(() => {
@@ -321,57 +298,35 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     return () => clearInterval(interval);
   }, [nextAnalysisTime]);
 
-  // Update signal remaining time and remove expired signals
+  // Update signal countdowns
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = Date.now();
-      
-      setSignals(prev => prev
-        .map(signal => ({
-          ...signal,
-          remainingTime: Math.max(0, Math.floor((signal.expiresAt - now) / 1000))
-        }))
-        .filter(signal => signal.expiresAt > now) // Remove expired signals
-      );
+      setSignals(prev => prev.map(signal => ({
+        ...signal,
+        countdown: Math.max(0, signal.countdown - 1),
+        isLive: true // Keep signals live for the entire duration
+      })).filter(signal => {
+        // Only remove signals after the analysis duration has passed
+        const signalAge = Date.now() - signal.timestamp;
+        return signalAge < (signalDuration * 60 * 1000);
+      }));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [signalDuration]);
 
-  const getRecommendationIcon = (recommendation: Signal['recommendation']) => {
-    switch (recommendation) {
-      case 'BUY':
+  const getSignalIcon = (type: Signal['type']) => {
+    switch (type) {
+      case 'CALL':
         return <TrendingUp className="h-5 w-5 text-green-400" />;
-      case 'SELL':
+      case 'PUT':
         return <TrendingDown className="h-5 w-5 text-red-400" />;
-      case 'HOLD':
+      case 'MATCH':
+        return <Target className="h-5 w-5 text-blue-400" />;
+      case 'DIFFER':
         return <Minus className="h-5 w-5 text-yellow-400" />;
       default:
         return null;
-    }
-  };
-
-  const getRecommendationColor = (recommendation: Signal['recommendation']) => {
-    switch (recommendation) {
-      case 'BUY':
-        return 'border-green-500 bg-green-500/10';
-      case 'SELL':
-        return 'border-red-500 bg-red-500/10';
-      case 'HOLD':
-        return 'border-yellow-500 bg-yellow-500/10';
-    }
-  };
-
-  const getStrengthColor = (strength: Signal['strength']) => {
-    switch (strength) {
-      case 'CRITICAL':
-        return 'text-red-400 animate-pulse';
-      case 'HIGH':
-        return 'text-green-400';
-      case 'MEDIUM':
-        return 'text-yellow-400';
-      case 'LOW':
-        return 'text-gray-400';
     }
   };
 
@@ -388,16 +343,16 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     }
   };
 
-  const getSignalIcon = (type: Signal['type']) => {
-    switch (type) {
-      case 'CALL':
-        return <TrendingUp className="h-5 w-5 text-green-400" />;
-      case 'PUT':
-        return <TrendingDown className="h-5 w-5 text-red-400" />;
-      case 'MATCH':
-        return <Target className="h-5 w-5 text-blue-400" />;
-      case 'DIFFER':
-        return <Activity className="h-5 w-5 text-yellow-400" />;
+  const getStrengthColor = (strength: Signal['strength']) => {
+    switch (strength) {
+      case 'CRITICAL':
+        return 'text-red-400 animate-pulse';
+      case 'HIGH':
+        return 'text-green-400';
+      case 'MEDIUM':
+        return 'text-yellow-400';
+      case 'LOW':
+        return 'text-gray-400';
     }
   };
 
@@ -418,9 +373,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     { value: 2, label: '2 minutes' },
     { value: 3, label: '3 minutes' },
     { value: 5, label: '5 minutes' },
-    { value: 7, label: '7 minutes' },
     { value: 10, label: '10 minutes' },
-    { value: 12, label: '12 minutes' },
     { value: 15, label: '15 minutes' }
   ];
 
@@ -470,18 +423,15 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
             <div className="hidden md:flex items-center space-x-4 text-sm">
               {/* Duration Selector */}
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
-                <label className="text-gray-400 text-xs block mb-1">Analysis Duration</label>
                 <select
                   value={signalDuration}
                   onChange={(e) => {
                     const newDuration = parseInt(e.target.value);
                     setSignalDuration(newDuration);
-                    // Clear existing signals and reset analysis time
-                    setSignals([]);
-                    setNextAnalysisTime(Date.now() + 5000); // Start new analysis in 5 seconds
-                    setAnalysisStatus('waiting');
+                    // Reset next analysis time when duration changes
+                    setNextAnalysisTime(Date.now() + (newDuration * 60 * 1000));
                   }}
-                  className="bg-transparent text-blue-400 font-medium text-sm focus:outline-none w-full"
+                  className="bg-transparent text-blue-400 font-bold text-sm focus:outline-none"
                 >
                   {durationOptions.map(option => (
                     <option key={option.value} value={option.value} className="bg-gray-800">
@@ -489,6 +439,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </option>
                   ))}
                 </select>
+                <div className="text-gray-400 text-xs">Duration</div>
               </div>
               
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
@@ -609,7 +560,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
                       {signalDuration}min hold
-                    </div>
+                      </div>
                   </div>
                 </div>
                 
@@ -665,7 +616,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-400">Expiry:</span>
-                      <span className="text-white font-medium">{new Date(signal.expiresAt).toLocaleTimeString()}</span>
+                      <span className="text-white font-medium">{signal.expiry}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-400">Trend:</span>

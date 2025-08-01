@@ -5,7 +5,6 @@ import { useWebSocket } from '../contexts/WebSocketContext';
 import { useTradingContext } from '../contexts/TradingContext';
 import AssetAnalysis from '../components/Trading/AssetAnalysis';
 import AssetSelector from '../components/Trading/AssetSelector';
-import TradeHistory from '../components/Trading/TradeHistory';
 import { TrendingUp, TrendingDown, Activity, DollarSign, User } from 'lucide-react';
 
 const TradingView: React.FC = () => {
@@ -126,7 +125,7 @@ const TradingView: React.FC = () => {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {/* Asset Selection */}
           <div>
             <AssetSelector 
@@ -136,16 +135,8 @@ const TradingView: React.FC = () => {
           </div>
 
           {/* Asset Analysis */}
-          <div className="lg:col-span-1">
-            <AssetAnalysis selectedAsset={selectedAsset} />
-          </div>
-        </div>
-
-        {/* Bottom Grid */}
-        <div className="grid grid-cols-1 gap-6 mt-6">
-          {/* Trade History */}
           <div>
-            <TradeHistory />
+            <AssetAnalysis selectedAsset={selectedAsset} />
           </div>
         </div>
       </div>

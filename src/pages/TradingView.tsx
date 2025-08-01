@@ -77,14 +77,14 @@ const TradingView: React.FC = () => {
     {
       name: 'Total Profit',
       value: `$${tradingStats.totalProfit.toFixed(2)}`,
-      change: `${tradingStats.totalProfit >= 0 ? '+' : ''}${((tradingStats.totalProfit / (user?.balance || 1000)) * 100).toFixed(1)}%`,
+      change: `${tradingStats.totalTrades} trades`,
       icon: DollarSign,
       color: tradingStats.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
     },
     {
       name: 'Win Rate',
       value: `${tradingStats.winRate.toFixed(1)}%`,
-      change: `${tradingStats.totalTrades} trades`,
+      change: `${tradingStats.winningTrades}W / ${tradingStats.totalTrades - tradingStats.winningTrades}L`,
       icon: TrendingUp,
       color: tradingStats.winRate >= 60 ? 'text-green-400' : tradingStats.winRate >= 50 ? 'text-yellow-400' : 'text-red-400'
     },

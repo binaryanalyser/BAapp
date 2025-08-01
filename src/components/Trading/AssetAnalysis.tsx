@@ -551,11 +551,6 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
                 <span className="text-gray-400">Potential Payout:</span>
                 <span className="text-green-400 font-medium">
                   {potentialPayout.toFixed(2)} {user?.currency}
-                  {askPrice > 0 && (
-                    <span className="text-xs text-gray-400 ml-1">
-                      (Cost: {askPrice.toFixed(2)})
-                    </span>
-                  )}
                 </span>
               </div>
               <div className="flex justify-between items-center">

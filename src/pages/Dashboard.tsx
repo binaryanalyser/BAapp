@@ -10,6 +10,12 @@ const Dashboard: React.FC = () => {
   const { isConnected, subscribeTo } = useWebSocket();
   const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
 
+  useEffect(() => {
+    if (isConnected) {
+      selectedSymbols.forEach(symbol => subscribeTo(symbol));
+    }
+  }, [isConnected, subscribeTo]);
+
   // Show loading while checking authentication
   if (isLoading) {
     return (
@@ -29,12 +35,6 @@ const Dashboard: React.FC = () => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-
-  useEffect(() => {
-    if (isConnected) {
-      selectedSymbols.forEach(symbol => subscribeTo(symbol));
-    }
-  }, [isConnected, subscribeTo]);
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">

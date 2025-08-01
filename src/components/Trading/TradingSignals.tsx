@@ -50,6 +50,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   const [analysisCountdown, setAnalysisCountdown] = useState<number>(0);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [aiCountdown, setAiCountdown] = useState<number>(0);
+  const [lastRecommendationTime, setLastRecommendationTime] = useState<number>(0);
+  const [isAnalysisActive, setIsAnalysisActive] = useState<boolean>(false);
 
   // AI Recommendation state
   const [aiRecommendation, setAiRecommendation] = useState<{
@@ -349,17 +351,43 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
   // Perform AI Analysis
   const performAnalysis = useCallback(() => {
+    // Prevent multiple simultaneous analyses
+    if (isAnalysisActive) {
+      console.log('Analysis already in progress, skipping...');
+      return;
+    }
+
+    // Check if we should wait before next analysis
+    const now = Date.now();
+    const timeSinceLastRecommendation = now - lastRecommendationTime;
+    const minInterval = signalDuration * 60 * 1000; // Convert minutes to milliseconds
+    
+    if (timeSinceLastRecommendation < minInterval && lastRecommendationTime > 0) {
+      console.log(`Skipping analysis - only ${Math.round(timeSinceLastRecommendation / 1000)}s since last recommendation`);
+      return;
+    }
+
     console.log('Starting AI Analysis...');
     setAnalysisStatus('analyzing');
+    setIsAnalysisActive(true);
     
     setTimeout(() => {
       // Generate AI Recommendation
       const recommendation = generateAIRecommendation(marketData);
-      setAiRecommendation(recommendation);
       
-      // Set countdown for the selected duration
-      const durationInSeconds = signalDuration * 60;
-      setAiCountdown(durationInSeconds);
+      // Only update recommendation if we have valid data
+      if (recommendation.action && recommendation.confidence > 0) {
+        setAiRecommendation({
+          ...recommendation,
+          startTime: Date.now(),
+          duration: signalDuration * 60
+        });
+        setLastRecommendationTime(Date.now());
+        
+        // Set countdown for the selected duration
+        const durationInSeconds = signalDuration * 60;
+        setAiCountdown(durationInSeconds);
+      }
       
       // Generate individual signals
       const symbolsToAnalyze = selectedAsset 
@@ -385,19 +413,20 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       });
       
       setAnalysisStatus('ready');
-      setLastAnalysis(Date.now());
+      setIsAnalysisActive(false);
       
       console.log(`Analysis complete. Next analysis in ${signalDuration} minutes.`);
-    }, 2000);
-  }, [marketData, generateAIRecommendation, selectedAsset, signalDuration, generateAdvancedSignal]);
+    }, 2000); // 2 second analysis simulation
+  }, [marketData, generateAIRecommendation, selectedAsset, signalDuration, generateAdvancedSignal, isAnalysisActive, lastRecommendationTime]);
 
   // Handle duration change
   useEffect(() => {
-    if (!isInitializing && Object.keys(marketData).length > 0) {
+    // Only restart analysis if no active recommendation or if duration changed significantly
+    if (!isInitializing && Object.keys(marketData).length > 0 && !aiRecommendation) {
       console.log(`Duration changed to ${signalDuration} minutes. Restarting analysis...`);
       performAnalysis();
     }
-  }, [signalDuration, performAnalysis, isInitializing]);
+  }, [signalDuration, performAnalysis, isInitializing, aiRecommendation]);
 
   // AI Recommendation countdown
   useEffect(() => {
@@ -406,7 +435,12 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         setAiCountdown(prev => {
           const newCount = prev - 1;
           if (newCount === 0) {
-            // Time to perform new analysis
+            // Clear current recommendation and perform new analysis
+            setAiRecommendation(null);
+            setLastRecommendationTime(0);
+            setAnalysisStatus('analyzing');
+            
+            // Delay new analysis slightly to show transition
             setTimeout(() => performAnalysis(), 1000);
           }
           return newCount;
@@ -419,14 +453,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
   // Update analysis countdown for display
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (aiCountdown > 0) {
-        const remaining = aiCountdown;
-        setAnalysisCountdown(remaining);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
+    // Use aiCountdown directly for analysis countdown display
+    setAnalysisCountdown(aiCountdown);
   }, [aiCountdown]);
 
   // Update signal countdowns
@@ -533,13 +561,17 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent"></div>
                     <div className="absolute inset-0 animate-ping rounded-full h-5 w-5 border border-blue-400 opacity-20"></div>
                   </div>
-                  <span className="text-sm text-blue-400 font-medium">Analyzing Markets...</span>
+                  <span className="text-sm text-blue-400 font-medium">
+                    {isInitializing ? 'Initializing AI...' : 'Generating New Signals...'}
+                  </span>
                 </>
               ) : (
                 <>
                   <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
                   <div className="flex flex-col">
-                    <span className="text-sm text-green-400 font-medium">Live Analysis</span>
+                    <span className="text-sm text-green-400 font-medium">
+                      {aiRecommendation ? 'Active Recommendation' : 'Ready for Analysis'}
+                    </span>
                     {analysisCountdown > 0 && (
                       <span className="text-xs text-gray-400">
                         Next: {formatAnalysisCountdown(analysisCountdown)}
@@ -607,7 +639,9 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                   }`} />
                 </div>
                 <div>
-                  <h4 className="text-lg font-semibold text-white mb-1">AI Recommendation</h4>
+                  <h4 className="text-lg font-semibold text-white mb-1">
+                    AI Recommendation - {aiRecommendation.action}
+                  </h4>
                   <p className="text-sm text-gray-300 max-w-md">{aiRecommendation.reasoning}</p>
                 </div>
               </div>
@@ -617,14 +651,14 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                   aiRecommendation.action === 'BUY' ? 'text-green-400' :
                   aiRecommendation.action === 'SELL' ? 'text-red-400' : 'text-blue-400'
                 }`}>
-                  {aiRecommendation.action}
+                  {aiRecommendation.confidence}%
                 </div>
-                <div className="text-lg font-bold text-white mb-1">{aiRecommendation.confidence}%</div>
+                <div className="text-sm text-gray-400 mb-1">Confidence</div>
                 <div className="text-xl font-mono text-yellow-400 bg-gray-700/50 px-3 py-2 rounded-lg">
                   {formatCountdown(aiCountdown)}
                 </div>
                 <div className="text-xs text-gray-400 mt-1">
-                  {signalDuration}min analysis
+                  Active for {signalDuration}min
                 </div>
               </div>
             </div>
@@ -662,19 +696,18 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
             <h4 className="text-xl font-semibold text-white mb-2">
               {isInitializing ? 'Initializing AI Analysis' : 
                analysisStatus === 'analyzing' ? 'AI Market Analysis in Progress' :
-               'Waiting for Next Analysis'}
+               aiRecommendation ? 'AI Recommendation Active' : 'Ready for Analysis'}
             </h4>
             <p className="text-gray-400 mb-4">
               {isInitializing ? 'Setting up advanced market analysis algorithms...' :
                analysisStatus === 'analyzing' ? `Analyzing ${selectedAsset || 'market'} conditions...` :
-               `Next analysis in ${formatAnalysisCountdown(analysisCountdown)} - signals update every ${signalDuration} minute${signalDuration > 1 ? 's' : ''}`}
+               aiRecommendation ? `Current recommendation expires in ${formatAnalysisCountdown(analysisCountdown)}` :
+               `Click to start ${signalDuration}-minute analysis cycle`}
             </p>
-            {analysisCountdown > 0 && !isInitializing && analysisStatus !== 'analyzing' && (
+            {aiRecommendation && analysisCountdown > 0 && (
               <div className="mb-4">
                 <div className="text-lg font-mono text-yellow-400 mb-2">
-                  {aiRecommendation ? 
-                    `Current: ${aiRecommendation.action} - ${formatAnalysisCountdown(analysisCountdown)}` :
-                    `Next Analysis: ${formatAnalysisCountdown(analysisCountdown)}`}
+                  {`${aiRecommendation.action} Signal: ${formatAnalysisCountdown(analysisCountdown)}`}
                 </div>
                 <div className="w-64 bg-gray-700 rounded-full h-2 mx-auto">
                   <div 
@@ -685,6 +718,14 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                   ></div>
                 </div>
               </div>
+            )}
+            {!aiRecommendation && !isInitializing && analysisStatus !== 'analyzing' && (
+              <button
+                onClick={performAnalysis}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              >
+                Start AI Analysis
+              </button>
             )}
             <div className="flex items-center justify-center space-x-6 text-sm">
               <div className="flex items-center space-x-2">

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import TradingSignals from './TradingSignals';
 import QuickTrade from './QuickTrade';
-import { BarChart3, TrendingUp, TrendingDown, Activity, Target, Zap } from 'lucide-react';
+import TradingChart from './TradingChart';
+import { BarChart3, TrendingUp, TrendingDown, Activity, Target } from 'lucide-react';
 
 interface AssetAnalysisProps {
   selectedSymbol: string;
@@ -10,6 +11,7 @@ interface AssetAnalysisProps {
 
 const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
   const { ticks, subscribeTo } = useWebSocket();
+  const [activeTab, setActiveTab] = useState<'signals' | 'trade' | 'chart'>('signals');
   const [priceMovement, setPriceMovement] = useState<'up' | 'down' | 'neutral'>('neutral');
   const [previousPrice, setPreviousPrice] = useState<number>(0);
 
@@ -62,6 +64,12 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     }
   };
 
+  const tabs = [
+    { id: 'signals', label: 'AI Signals', icon: Target },
+    { id: 'trade', label: 'Quick Trade', icon: TrendingUp },
+    { id: 'chart', label: 'Chart', icon: BarChart3 }
+  ];
+
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
       {/* Header */}
@@ -86,14 +94,42 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
         </div>
       </div>
 
-      {/* AI Signals Section */}
-      <div className="mb-6">
-        <TradingSignals selectedAsset={selectedSymbol} />
+      {/* Tab Navigation */}
+      <div className="flex space-x-1 mb-6 bg-gray-700 rounded-lg p-1">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-gray-900 text-white border border-gray-500'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-600'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Quick Trade Section */}
-      <div className="mt-6">
-        <QuickTrade selectedAsset={selectedSymbol} />
+      {/* Tab Content */}
+      <div className="min-h-[400px]">
+        {activeTab === 'signals' && (
+          <TradingSignals selectedAsset={selectedSymbol} />
+        )}
+        
+        {activeTab === 'trade' && (
+          <QuickTrade selectedAsset={selectedSymbol} />
+        )}
+        
+        {activeTab === 'chart' && (
+          <div className="bg-gray-750 rounded-lg p-4">
+            <TradingChart symbol={selectedSymbol} />
+          </div>
+        )}
       </div>
     </div>
   );

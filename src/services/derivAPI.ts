@@ -67,7 +67,7 @@ class DerivAPI {
   private connectionListeners: Array<(connected: boolean) => void> = [];
   private subscriptions = new Map<string, string>(); // symbol -> subscription_id
   private readonly APP_ID = '88454';
-  private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${this.APP_ID}`;
+  private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=88454`;
   private requestCallbacks = new Map<number, { resolve: Function; reject: Function; timeout: NodeJS.Timeout }>();
   private requestId = 1;
   private reconnectAttempts = 0;
@@ -207,22 +207,15 @@ class DerivAPI {
   }
 
   private sendRequestInternal(request: any, timeout: number, resolve: Function, reject: Function): void {
-      if (!this.ws) {
-        reject(new Error('WebSocket connection not available'));
-        return;
-      }
-
       const reqId = this.requestId++;
       request.req_id = reqId;
 
       const timeoutHandle = setTimeout(() => {
         this.requestCallbacks.delete(reqId);
-        reject(new Error(`Request timeout after ${timeout}ms`));
+        reject(new Error('Request timeout'));
       }, timeout);
 
       this.requestCallbacks.set(reqId, { resolve, reject, timeout: timeoutHandle });
-      
-      console.log('Sending request:', JSON.stringify(request));
       this.ws.send(JSON.stringify(request));
   }
 
@@ -281,15 +274,7 @@ class DerivAPI {
   }
 
   async buyContract(parameters: any): Promise<ContractResponse> {
-    try {
-      console.log('Sending buy contract request:', parameters);
-      const response = await this.sendRequest({ buy: 1, ...parameters });
-      console.log('Buy contract response:', response);
-      return response;
-    } catch (error) {
-      console.error('Buy contract error:', error);
-      throw error;
-    }
+    return this.sendRequest({ buy: 1, ...parameters });
   }
 
   async getContractsFor(symbol: string): Promise<any> {

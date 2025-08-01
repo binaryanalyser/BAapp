@@ -166,70 +166,30 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
     const tradeDuration = parseInt(duration) * 60; // Convert minutes to seconds
     
     try {
-      // Execute real trade through Deriv API
-      const contractParams = {
-        contract_type: contractType,
-        symbol: selectedAsset,
-        duration: parseInt(duration),
-        duration_unit: 'm',
-        amount: parseFloat(amount),
-        basis: 'stake',
-        currency: user.currency || 'USD'
-      };
-
-      console.log('Executing trade with params:', contractParams);
-      const response = await derivAPI.buyContract(contractParams);
-      
-      if (response.error) {
-        throw new Error(response.error.message || 'Trade execution failed');
-      }
-
-      if (!response.buy) {
-        throw new Error('Invalid response from Deriv API');
-      }
-
-      console.log('Trade executed successfully:', response.buy);
+      // Simulate trade execution for demo purposes
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       const newTrade = {
         symbol: selectedAsset,
         type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
         stake: parseFloat(amount),
         duration: tradeDuration,
-        payout: response.buy.payout || parseFloat(amount) * 1.85,
+        payout: parseFloat(amount) * 1.85,
         profit: 0,
         status: 'open' as const,
         entryTime,
-        entryPrice: currentPrice,
-        contractId: response.buy.contract_id?.toString(),
-        transactionId: response.buy.transaction_id?.toString(),
-        purchaseTime: response.buy.purchase_time,
-        longcode: response.buy.longcode,
-        shortcode: response.buy.shortcode
+        entryPrice: currentPrice
       };
       
       addTrade(newTrade);
       setTradeSuccess(true);
       setCountdown(parseInt(duration) * 60);
-      
-      // Show success message
-      console.log(`Trade placed successfully: ${contractType} ${selectedAsset} for ${amount} ${user.currency}`);
+
+      // Trade will automatically expire and be resolved by TradingContext
       
     } catch (error) {
       console.error('Trade execution error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      
-      // Show user-friendly error messages
-      if (errorMessage.includes('InsufficientBalance')) {
-        alert('Insufficient balance. Please check your account balance.');
-      } else if (errorMessage.includes('InvalidSymbol')) {
-        alert('Invalid trading symbol. Please try a different asset.');
-      } else if (errorMessage.includes('TradingDisabled')) {
-        alert('Trading is currently disabled for this asset.');
-      } else if (errorMessage.includes('InvalidToken')) {
-        alert('Your session has expired. Please log in again.');
-      } else {
-        alert(`Failed to execute trade: ${errorMessage}`);
-      }
+      alert(`Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsTrading(false);
     }
@@ -353,6 +313,12 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
 
         {/* Trade Summary */}
         <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
+          {isLoadingProposal && (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400 mr-2"></div>
+              <span className="text-sm text-gray-400">Getting live prices...</span>
+            </div>
+          )}
           <div className="flex justify-between items-center mb-3">
             <span className="text-gray-400 text-sm">Asset:</span>
             <span className="text-white font-medium">{selectedAsset}</span>
@@ -396,13 +362,18 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
           {/* Trade Higher Button */}
           <button
             onClick={() => handleTradeAction('CALL')}
-            disabled={isTrading || !user || !currentPrice}
+            disabled={isTrading || !user || !currentPrice || isLoadingProposal}
             className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25"
           >
             {isTrading && selectedContract === 'CALL' ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 <span className="text-sm">Placing...</span>
+              </>
+            ) : isLoadingProposal ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Loading...</span>
               </>
             ) : (
               <>
@@ -416,13 +387,18 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
           {/* Trade Lower Button */}
           <button
             onClick={() => handleTradeAction('PUT')}
-            disabled={isTrading || !user || !currentPrice}
+            disabled={isTrading || !user || !currentPrice || isLoadingProposal}
             className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25"
           >
             {isTrading && selectedContract === 'PUT' ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 <span className="text-sm">Placing...</span>
+              </>
+            ) : isLoadingProposal ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Loading...</span>
               </>
             ) : (
               <>
@@ -440,6 +416,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
             <span>Please log in to place trades</span>
           </div>
         )}
+
         {(!currentPrice || !proposalData) && user && !isLoadingProposal && (
           <div className="flex items-center justify-center space-x-2 text-sm text-yellow-400">
             <Activity className="h-4 w-4 animate-pulse" />

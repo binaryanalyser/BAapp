@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { derivAPI, AuthResponse } from '../services/derivAPI';
-import { supabaseService } from '../services/supabaseService';
-import { User as SupabaseUser } from '../lib/supabase';
 
 interface User {
   loginid: string;
@@ -11,7 +9,6 @@ interface User {
   balance: number;
   is_virtual: number;
   country: string;
-  supabaseId?: string;
 }
 
 interface AuthContextType {
@@ -43,7 +40,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -83,47 +79,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           country: response.authorize.country
         };
 
-        // Save/update user in Supabase
-        const supabaseUserData = await supabaseService.createOrUpdateUser({
-          deriv_loginid: response.authorize.loginid,
-          deriv_token: authToken,
-          email: response.authorize.email,
-          fullname: response.authorize.fullname,
-          currency: response.authorize.currency,
-          balance: response.authorize.balance,
-          is_virtual: response.authorize.is_virtual === 1,
-          country: response.authorize.country
-        });
-
-        if (supabaseUserData) {
-          setSupabaseUser(supabaseUserData);
-          userData.supabaseId = supabaseUserData.id;
-        }
-
         setUser(userData);
         setToken(authToken);
         setIsAuthenticated(true);
         
         // Save token to localStorage
         localStorage.setItem('deriv_token', authToken);
-        
-        // Create session in Supabase
-        if (supabaseUserData) {
-          const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-          await supabaseService.createSession(supabaseUserData.id, sessionToken, expiresAt);
-          localStorage.setItem('session_token', sessionToken);
-        }
       }
     } catch (error) {
       console.error('Authorization failed:', error);
       // Clear any saved token if authorization fails
       localStorage.removeItem('deriv_token');
-      localStorage.removeItem('session_token');
       setUser(null);
       setToken(null);
       setIsAuthenticated(false);
-      setSupabaseUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -134,28 +103,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    // Clean up session in Supabase
-    const sessionToken = localStorage.getItem('session_token');
-    if (sessionToken) {
-      supabaseService.deleteSession(sessionToken);
-    }
     setUser(null);
     setToken(null);
     setIsAuthenticated(false);
-    setSupabaseUser(null);
     localStorage.removeItem('deriv_token');
-    localStorage.removeItem('session_token');
     derivAPI.disconnect();
   };
 
   const updateBalance = (balance: number) => {
     if (user) {
       setUser({ ...user, balance });
-      
-      // Update balance in Supabase
-      if (supabaseUser) {
-        supabaseService.updateUserBalance(supabaseUser.id, balance);
-      }
     }
   };
 

@@ -14,11 +14,15 @@ export class SupabaseService {
   }): Promise<User | null> {
     try {
       // First, try to find existing user
-      const { data: existingUser } = await supabase
+      const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
         .eq('deriv_loginid', userData.deriv_loginid)
-        .single();
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
 
       if (existingUser) {
         // Update existing user
@@ -72,9 +76,12 @@ export class SupabaseService {
         .from('users')
         .select('*')
         .eq('deriv_loginid', loginid)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
       return data;
     } catch (error) {
       console.error('Error fetching user:', error);
@@ -211,9 +218,12 @@ export class SupabaseService {
         .select('*')
         .eq('session_token', sessionToken)
         .gt('expires_at', new Date().toISOString())
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
       return data;
     } catch (error) {
       console.error('Error fetching session:', error);

@@ -34,7 +34,8 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
   const [countdown, setCountdown] = useState<number>(0);
   const [lastAnalysisTime, setLastAnalysisTime] = useState<number>(0);
   const [analysisInterval, setAnalysisInterval] = useState<number>(5); // minutes
-  const [nextAnalysisIn, setNextAnalysisIn] = useState<number>(0);
+  const [nextAnalysisCountdown, setNextAnalysisCountdown] = useState<number>(0);
+  const [isWaitingForNextAnalysis, setIsWaitingForNextAnalysis] = useState<boolean>(false);
 
   // Subscribe to WebSocket data for the selected symbol
   useEffect(() => {
@@ -47,7 +48,8 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     setCurrentSignal(null);
     setCountdown(0);
     setLastAnalysisTime(0);
-    setNextAnalysisIn(0);
+    setNextAnalysisCountdown(0);
+    setIsWaitingForNextAnalysis(false);
   }, [selectedSymbol]);
 
   // Update price history when new ticks arrive
@@ -191,6 +193,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
   const performAnalysis = useCallback(() => {
     if (priceHistory.length < 20) return;
     if (currentSignal && countdown > 0) return; // Don't analyze if signal is active
+    if (isWaitingForNextAnalysis && nextAnalysisCountdown > 0) return; // Don't analyze during countdown
 
     const now = Date.now();
     const timeSinceLastAnalysis = now - lastAnalysisTime;
@@ -198,10 +201,18 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
 
     // Don't analyze too frequently
     if (timeSinceLastAnalysis < minInterval && lastAnalysisTime > 0) {
+      // Start countdown if not already started
+      if (!isWaitingForNextAnalysis) {
+        const remainingTime = Math.ceil((minInterval - timeSinceLastAnalysis) / 1000);
+        setNextAnalysisCountdown(remainingTime);
+        setIsWaitingForNextAnalysis(true);
+      }
       return;
     }
 
     setIsAnalyzing(true);
+    setIsWaitingForNextAnalysis(false);
+    setNextAnalysisCountdown(0);
     
     setTimeout(() => {
       const currentPrice = priceHistory[priceHistory.length - 1];
@@ -223,23 +234,33 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
           setCurrentSignal(newSignal);
           setCountdown(newSignal.duration);
           setLastAnalysisTime(now);
+          // Start countdown for next analysis after signal expires
+          const nextAnalysisTime = analysisInterval * 60; // seconds
+          setNextAnalysisCountdown(newSignal.duration + nextAnalysisTime);
+          setIsWaitingForNextAnalysis(true);
           console.log(`New signal generated for ${selectedSymbol}:`, newSignal);
+        } else {
+          // No signal generated, start countdown for next analysis
+          setLastAnalysisTime(now);
+          const nextAnalysisTime = analysisInterval * 60; // seconds
+          setNextAnalysisCountdown(nextAnalysisTime);
+          setIsWaitingForNextAnalysis(true);
         }
       }
       
       setIsAnalyzing(false);
     }, 2000); // 2 second analysis delay
-  }, [priceHistory, currentSignal, countdown, lastAnalysisTime, analysisInterval, calculateTechnicalIndicators, generateSignal]);
+  }, [priceHistory, currentSignal, countdown, lastAnalysisTime, analysisInterval, isWaitingForNextAnalysis, nextAnalysisCountdown, calculateTechnicalIndicators, generateSignal]);
 
   // Auto-analysis when symbol changes or enough price data is available
   useEffect(() => {
-    if (priceHistory.length >= 20 && !currentSignal && !isAnalyzing) {
+    if (priceHistory.length >= 20 && !currentSignal && !isAnalyzing && !isWaitingForNextAnalysis) {
       const timer = setTimeout(() => {
         performAnalysis();
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [selectedSymbol, priceHistory.length, currentSignal, isAnalyzing, performAnalysis]);
+  }, [selectedSymbol, priceHistory.length, currentSignal, isAnalyzing, isWaitingForNextAnalysis, performAnalysis]);
 
   // Countdown timer for active signal
   useEffect(() => {
@@ -250,10 +271,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
           if (newCount === 0) {
             setCurrentSignal(null);
             console.log(`Signal expired for ${selectedSymbol}, ready for new analysis`);
-            // Schedule next analysis
-            setTimeout(() => {
-              performAnalysis();
-            }, 2000);
+            // Don't immediately analyze, wait for the analysis interval countdown
           }
           return newCount;
         });
@@ -262,25 +280,68 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     }
   }, [countdown, selectedSymbol, performAnalysis]);
 
-  // Next analysis countdown
+  // Next analysis countdown timer
   useEffect(() => {
-    if (!currentSignal && !isAnalyzing && lastAnalysisTime > 0) {
+    if (isWaitingForNextAnalysis && nextAnalysisCountdown > 0) {
       const interval = setInterval(() => {
-        const now = Date.now();
-        const timeSinceLastAnalysis = now - lastAnalysisTime;
-        const minInterval = analysisInterval * 60 * 1000;
-        const remaining = Math.max(0, Math.ceil((minInterval - timeSinceLastAnalysis) / 1000));
-        setNextAnalysisIn(remaining);
-        
-        if (remaining === 0 && priceHistory.length >= 20) {
-          performAnalysis();
-        }
+        setNextAnalysisCountdown(prev => {
+          const newCount = prev - 1;
+          if (newCount === 0) {
+            setIsWaitingForNextAnalysis(false);
+            // Trigger analysis after countdown
+            if (priceHistory.length >= 20 && !currentSignal && !isAnalyzing) {
+              setTimeout(() => {
+                performAnalysis();
+              }, 1000);
+            }
+          }
+          return Math.max(0, newCount);
+        });
       }, 1000);
       return () => clearInterval(interval);
-    } else {
-      setNextAnalysisIn(0);
     }
-  }, [currentSignal, isAnalyzing, lastAnalysisTime, analysisInterval, priceHistory.length, performAnalysis]);
+  }, [isWaitingForNextAnalysis, nextAnalysisCountdown, priceHistory.length, currentSignal, isAnalyzing, performAnalysis]);
+
+  // Manual analysis trigger
+  const handleManualAnalysis = useCallback(() => {
+    if (priceHistory.length >= 20 && !currentSignal && !isAnalyzing && !isWaitingForNextAnalysis) {
+      performAnalysis();
+    }
+  }, [priceHistory.length, currentSignal, isAnalyzing, isWaitingForNextAnalysis, performAnalysis]);
+
+  // Reset countdown when interval changes
+  useEffect(() => {
+    if (!currentSignal && !isAnalyzing && lastAnalysisTime > 0) {
+      const now = Date.now();
+      const timeSinceLastAnalysis = now - lastAnalysisTime;
+      const minInterval = analysisInterval * 60 * 1000;
+      
+      if (timeSinceLastAnalysis < minInterval) {
+        const remaining = Math.ceil((minInterval - timeSinceLastAnalysis) / 1000);
+        setNextAnalysisCountdown(remaining);
+        setIsWaitingForNextAnalysis(true);
+      } else {
+        setNextAnalysisCountdown(0);
+        setIsWaitingForNextAnalysis(false);
+        // Can analyze immediately
+        if (priceHistory.length >= 20) {
+          setTimeout(() => {
+            performAnalysis();
+          }, 500);
+        }
+      }
+    }
+  }, [analysisInterval, currentSignal, isAnalyzing, lastAnalysisTime, priceHistory.length, performAnalysis]);
+
+  // Legacy next analysis countdown (kept for compatibility)
+  useEffect(() => {
+    if (isWaitingForNextAnalysis) {
+      const interval = setInterval(() => {
+        
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isWaitingForNextAnalysis]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -350,10 +411,10 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
               <span className="text-sm text-green-400">Signal Active</span>
             </div>
-          ) : nextAnalysisIn > 0 ? (
+          ) : isWaitingForNextAnalysis && nextAnalysisCountdown > 0 ? (
             <div className="flex items-center space-x-2">
               <Clock className="h-4 w-4 text-yellow-400" />
-              <span className="text-sm text-yellow-400">Next: {formatTime(nextAnalysisIn)}</span>
+              <span className="text-sm text-yellow-400">Next: {formatTime(nextAnalysisCountdown)}</span>
             </div>
           ) : (
             <div className="flex items-center space-x-2">
@@ -463,6 +524,13 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
           <div className="mb-4">
             {isAnalyzing ? (
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto"></div>
+            ) : isWaitingForNextAnalysis && nextAnalysisCountdown > 0 ? (
+              <div className="relative">
+                <Clock className="h-12 w-12 text-yellow-400 mx-auto opacity-50" />
+                <div className="absolute -top-2 -right-2 bg-yellow-400 text-gray-900 rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
+                  {Math.ceil(nextAnalysisCountdown / 60)}
+                </div>
+              </div>
             ) : (
               <Brain className="h-12 w-12 text-gray-400 mx-auto opacity-50" />
             )}
@@ -470,14 +538,35 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
           <h4 className="text-lg font-medium text-white mb-2">
             {isAnalyzing ? 'Analyzing Market Conditions' : 
              priceHistory.length < 20 ? 'Collecting Market Data' :
-             nextAnalysisIn > 0 ? 'Waiting for Next Analysis' : 'Ready for Analysis'}
+             isWaitingForNextAnalysis && nextAnalysisCountdown > 0 ? 'Waiting for Next Analysis' : 'Ready for Analysis'}
           </h4>
           <p className="text-gray-400 text-sm">
             {isAnalyzing ? `Analyzing ${selectedSymbol} price patterns and indicators...` :
              priceHistory.length < 20 ? `Need ${20 - priceHistory.length} more price points` :
-             nextAnalysisIn > 0 ? `Next analysis in ${formatTime(nextAnalysisIn)}` :
+             isWaitingForNextAnalysis && nextAnalysisCountdown > 0 ? `Next analysis in ${formatTime(nextAnalysisCountdown)}` :
              'Click to start manual analysis'}
           </p>
+          
+          {/* Countdown Progress Bar for Next Analysis */}
+          {isWaitingForNextAnalysis && nextAnalysisCountdown > 0 && (
+            <div className="mt-4">
+              <div className="flex justify-between text-sm text-gray-400 mb-2">
+                <span>Next Analysis</span>
+                <span>{formatTime(nextAnalysisCountdown)}</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-3">
+                <div 
+                  className="bg-gradient-to-r from-yellow-500 to-yellow-600 h-3 rounded-full transition-all duration-1000 ease-linear"
+                  style={{ 
+                    width: `${100 - (nextAnalysisCountdown / (analysisInterval * 60)) * 100}%` 
+                  }}
+                ></div>
+              </div>
+              <div className="text-xs text-gray-500 mt-1 text-center">
+                Waiting for {analysisInterval} minute interval
+              </div>
+            </div>
+          )}
           
           {/* Progress Bar for Market Data Collection */}
           {priceHistory.length < 20 && (
@@ -501,9 +590,9 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
             </div>
           )}
           
-          {!isAnalyzing && priceHistory.length >= 20 && nextAnalysisIn === 0 && (
+          {!isAnalyzing && priceHistory.length >= 20 && !isWaitingForNextAnalysis && (
             <button
-              onClick={performAnalysis}
+              onClick={handleManualAnalysis}
               className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
             >
               <Zap className="inline h-4 w-4 mr-2" />

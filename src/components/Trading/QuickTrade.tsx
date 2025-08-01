@@ -427,5 +427,5 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
     </div>
   );
 };
-s
+
 export default QuickTrade;

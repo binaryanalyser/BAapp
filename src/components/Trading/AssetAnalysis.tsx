@@ -8,7 +8,7 @@ import { useTradingContext } from '../../contexts/TradingContext';
 interface AssetAnalysisProps {
   selectedAsset: string;
 }
-
+  selectedSymbol?: string;
 interface TechnicalIndicator {
   name: string;
   value: number;
@@ -54,7 +54,19 @@ interface AISignal {
 const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const { ticks } = useWebSocket();
   const [isLoadingProposal, setIsLoadingProposal] = useState(false);
-  const [profitAnimation, setProfitAnimation] = useState(false);
+const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }) => {
+  // Early validation
+  if (!selectedSymbol || typeof selectedSymbol !== 'string') {
+    return (
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="text-center py-8">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-400" />
+          <p className="text-red-400">Invalid symbol selected</p>
+        </div>
+      </div>
+    );
+  }
+
   const { user } = useAuth();
   const { addTrade, updateTrade } = useTradingContext();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -82,6 +94,31 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const [isCollectingData, setIsCollectingData] = useState(true);
   
   // Quick Trade states
+  
+  // Validate WebSocket context and tick data
+  if (!ticks) {
+    return (
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+          <p className="text-gray-400">Connecting to market data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const tickData = ticks[selectedSymbol];
+  if (!tickData || typeof tickData.price !== 'number') {
+    return (
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="text-center py-8">
+          <Activity className="h-12 w-12 mx-auto mb-4 text-yellow-400 animate-pulse" />
+          <p className="text-gray-400">Waiting for {selectedSymbol} tick data...</p>
+        </div>
+      </div>
+    );
+  }
+
   const [selectedContract, setSelectedContract] = useState('CALL');
   const [amount, setAmount] = useState<string>('10');
   const [duration, setDuration] = useState('5');
@@ -94,7 +131,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const [priceMovement, setPriceMovement] = useState<'up' | 'down' | 'none'>('none');
   const [previousPrice, setPreviousPrice] = useState<number>(0);
 
-  const currentPrice = ticks[selectedAsset]?.price || 0;
+  const currentPrice = tickData.price;
   
   // Track price movement
   useEffect(() => {
@@ -315,7 +352,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
             status: isWin ? 'won' : 'lost',
             exitTime: Date.now(),
             exitPrice: contract.exit_tick || currentPrice,
-            payout,
+        const response = await derivAPI.getContractsFor(selectedSymbol);
             profit
           });
         }
@@ -815,7 +852,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       timeframe = '3-8 minutes';
       riskReward = targetPrice ? Math.abs((targetPrice - currentPrice) / (stopLoss! - currentPrice)) : 1.0;
     }
-
+  }, [selectedContract, selectedSymbol, duration, amount, currentPrice, user?.currency]);
     // Adjust confidence based on market conditions
     if (sentiment.overall === action.replace('BUY', 'BULLISH').replace('SELL', 'BEARISH')) {
       confidence = Math.min(95, confidence + 5);
@@ -833,7 +870,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       indicators: activeIndicators
     };
   };
-
+    if (selectedSymbol) {
   // Perform analysis
   const performAnalysis = () => {
     setIsAnalyzing(true);
@@ -845,14 +882,14 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       const patterns = detectPricePatterns(priceHistory.prices);
       const recommendation = generateAIRecommendation(indicators, sentiment, patterns);
 
-      setTechnicalIndicators(indicators);
+          symbol: selectedSymbol,
       setMarketSentiment(sentiment);
       setPriceLevels(levels);
       setAiRecommendation(recommendation);
       setLastAnalysis(Date.now());
       setIsAnalyzing(false);
     }, 1500);
-  };
+  }, [selectedSymbol]);
 
   // Auto-analyze when asset changes or every 30 seconds
   useEffect(() => {
@@ -866,7 +903,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
     }, 15000); // More frequent updates
     return () => clearInterval(interval);
   }, [selectedAsset, currentPrice, isCollectingData, priceHistory.prices.length]);
-
+        symbol: selectedSymbol,
   const getSignalColor = (signal: string) => {
     switch (signal) {
       case 'BUY': return 'text-green-400';
@@ -1251,10 +1288,10 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
               ></div>
             </div>
           </div>
-        </div>
+      <TradingSignals selectedAsset={selectedSymbol} />
       </div>
       )}
-
+      <QuickTrade selectedAsset={selectedSymbol} />
     </div>
   );
 };

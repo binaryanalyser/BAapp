@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useTradingContext } from '../contexts/TradingContext';
+import ErrorBoundary from '../components/UI/ErrorBoundary';
 import AssetAnalysis from '../components/Trading/AssetAnalysis';
 import AssetSelector from '../components/Trading/AssetSelector';
 import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause } from 'lucide-react';
@@ -185,7 +186,9 @@ const TradingView: React.FC = () => {
               selectedAsset={selectedAsset}
               onAssetChange={setSelectedAsset}
             />
-            <AssetAnalysis selectedAsset={selectedAsset} />
+            <ErrorBoundary>
+              <AssetAnalysis selectedSymbol={selectedAsset} />
+            </ErrorBoundary>
           </div>
 
           {/* Trade History - Full Width Below */}

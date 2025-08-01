@@ -26,8 +26,6 @@ interface Signal {
     volatility: number;
   };
   remainingTime: number; // Remaining time in seconds
-  isLive?: boolean;
-  expiry?: string;
 }
 
 interface MarketData {
@@ -216,9 +214,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         volume: data.volume > 1.5 ? 'high' : data.volume > 0.8 ? 'normal' : 'low'
       },
       priceAction,
-      remainingTime: Math.floor(durationMs / 1000),
-      isLive: true,
-      expiry: new Date(now + durationMs).toLocaleTimeString()
+      remainingTime: Math.floor(durationMs / 1000)
     };
   }, [calculateRSI, calculateMACD, calculateBollingerBands, analyzePriceAction, signalDuration]);
 
@@ -526,20 +522,17 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
             <h4 className="text-xl font-semibold text-white mb-2">
               AI Market Analysis in Progress
             </h4>
-            <p className="text-gray-400 mb-6">
-              {analysisStatus === 'analyzing' 
-                ? 'Analyzing market conditions and generating signals...'
-                : `Next analysis in ${formatAnalysisCountdown(analysisCountdown)} - signals will hold for ${signalDuration} minute${signalDuration > 1 ? 's' : ''}`
-              }
+            <p className="text-gray-400 mb-4">
+              Advanced algorithms are processing {selectedAsset || 'market'} conditions every {signalDuration} minute{signalDuration > 1 ? 's' : ''}...
             </p>
             {analysisCountdown > 0 && (
               <div className="mb-4">
-                <div className="text-2xl font-mono text-yellow-400 mb-3">
+                <div className="text-lg font-mono text-yellow-400 mb-2">
                   Next Analysis: {formatAnalysisCountdown(analysisCountdown)}
                 </div>
                 <div className="w-64 bg-gray-700 rounded-full h-2 mx-auto">
                   <div 
-                    className="bg-gradient-to-r from-blue-400 to-purple-400 h-2 rounded-full transition-all duration-1000"
+                    className="bg-blue-400 h-2 rounded-full transition-all duration-1000"
                     style={{ 
                       width: `${100 - (analysisCountdown / (signalDuration * 60)) * 100}%` 
                     }}
@@ -547,18 +540,18 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                 </div>
               </div>
             )}
-            <div className="flex items-center justify-center space-x-8 text-sm">
+            <div className="flex items-center justify-center space-x-6 text-sm">
               <div className="flex items-center space-x-2">
                 <Activity className="h-4 w-4 text-blue-400" />
-                <span className="text-gray-300">{signalDuration}min Intervals</span>
+                <span className="text-gray-300">{signalDuration}min Analysis</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Target className="h-4 w-4 text-green-400" />
-                <span className="text-gray-300">Persistent Signals</span>
+                <span className="text-gray-300">Pattern Recognition</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Brain className="h-4 w-4 text-purple-400" />
-                <span className="text-gray-300">AI Analysis</span>
+                <span className="text-gray-300">ML Predictions</span>
               </div>
             </div>
           </div>
@@ -672,7 +665,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-400">Expiry:</span>
-                      <span className="text-white font-medium">{signal.expiry}</span>
+                      <span className="text-white font-medium">{new Date(signal.expiresAt).toLocaleTimeString()}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-400">Trend:</span>

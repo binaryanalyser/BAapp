@@ -1059,6 +1059,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
           </div>
         </div>
       </div>
+      )}
 
     </div>
   );

@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (savedToken) {
       // Wait for derivAPI connection before attempting authorization
       const checkConnection = () => {
-        if (derivAPI.isConnected()) {
+        if (derivAPI.getConnectionStatus()) {
           handleTokenLogin(savedToken);
         } else {
           // Listen for connection status changes

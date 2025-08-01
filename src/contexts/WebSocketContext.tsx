@@ -69,14 +69,18 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
   const subscribeTo = (symbol: string) => {
     if (!subscriptions.has(symbol)) {
-      derivAPI.subscribeTicks(symbol);
+      derivAPI.subscribeTicks(symbol).catch(error => {
+        console.warn(`Failed to subscribe to ${symbol}:`, error);
+      });
       setSubscriptions(prev => new Set(prev).add(symbol));
     }
   };
 
   const unsubscribeFrom = (symbol: string) => {
     if (subscriptions.has(symbol)) {
-      derivAPI.unsubscribeTicks(symbol);
+      derivAPI.unsubscribeTicks(symbol).catch(error => {
+        console.warn(`Failed to unsubscribe from ${symbol}:`, error);
+      });
       setSubscriptions(prev => {
         const newSet = new Set(prev);
         newSet.delete(symbol);

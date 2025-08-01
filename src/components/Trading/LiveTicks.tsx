@@ -62,7 +62,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     if (isConnected) {
       setIsLoading(true);
       setHasReceivedData(false);
-      setDigits([]);
+      setDigits(Array(20).fill(0));
       setDigitHistory([]);
       setChartData([]);
       setPrices([]);
@@ -78,7 +78,10 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       const newDigit = getLastDigit(currentTick.tick, decimals);
       
       setHasReceivedData(true);
-      setDigits(prev => [...prev.slice(1), newDigit]);
+      setDigits(prev => {
+        const newDigits = [...prev.slice(1), newDigit];
+        return newDigits;
+      });
       setDigitHistory(prev => [...prev, newDigit].slice(-100));
       setPrices(prev => [...prev.slice(-19), currentTick.tick]);
       setChartData(prev => [...prev.slice(-19), {
@@ -88,7 +91,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       }]);
       setIsLoading(false);
     }
-  }, [ticks, selectedSymbol]);
+  }, [ticks, selectedSymbol, getDecimalPlaces]);
 
   const handleSymbolChange = (symbol: string) => {
     console.log('Changing symbol to:', symbol);
@@ -108,8 +111,10 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
 
   const getPriceMovement = (index: number) => {
     if (index === 0 || prices.length < 2) return 'none';
-    const current = prices[index];
-    const previous = prices[index - 1];
+    const current = prices[Math.min(index, prices.length - 1)];
+    const previous = prices[Math.min(index - 1, prices.length - 2)];
+    
+    if (!current || !previous) return 'none';
     
     if (current > previous) return 'up';
     if (current < previous) return 'down';

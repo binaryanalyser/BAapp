@@ -49,12 +49,17 @@ class DerivAPI {
           callback?.(data);
           this.callbacks.delete(data.req_id);
         }
+        
+        // Handle subscription confirmations
+        if (data.msg_type === 'tick' && data.tick) {
+          this.tickCallback?.(data);
+        }
       };
 
       this.ws.onclose = () => {
         this.connectionPromise = null;
         this.connectionCallback?.(false);
-        console.log('WebSocket closed:', event.code, event.reason);
+        console.log('WebSocket closed');
         
         // Auto-reconnect with exponential backoff
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -75,7 +80,7 @@ class DerivAPI {
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         this.connectionPromise = null;
-        // Don't reject immediately, let the close handler manage reconnection
+        reject(new Error('WebSocket connection failed'));
       };
     });
 

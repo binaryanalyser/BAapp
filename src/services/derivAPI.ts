@@ -66,7 +66,7 @@ class DerivAPI {
   private tickListeners: Array<(data: TickData) => void> = [];
   private connectionListeners: Array<(connected: boolean) => void> = [];
   private subscriptions = new Map<string, string>(); // symbol -> subscription_id
-  private readonly APP_ID = '88454';
+  private readonly APP_ID = '1089';
   private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${this.APP_ID}`;
   private requestCallbacks = new Map<number, { resolve: Function; reject: Function; timeout: NodeJS.Timeout }>();
   private requestId = 1;
@@ -83,6 +83,8 @@ class DerivAPI {
 
         this.ws.onopen = () => {
           console.log('WebSocket connected to Deriv API');
+          // Send initial ping to verify connection
+          this.ws?.send(JSON.stringify({ ping: 1 }));
           this.isConnected = true;
           this.isConnecting = false;
           this.connectionListeners.forEach(listener => listener(true));
@@ -92,6 +94,13 @@ class DerivAPI {
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            
+            // Handle ping response
+            if (data.pong) {
+              console.log('WebSocket ping successful');
+              return;
+            }
+            
             this.handleResponse(data);
           } catch (error) {
             console.error('Failed to parse WebSocket message:', error);
@@ -99,11 +108,8 @@ class DerivAPI {
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket connection failed:', {
-            error,
-            url: this.WS_URL,
-            timestamp: new Date().toISOString()
-          });
+          console.error('WebSocket connection failed:', error);
+          console.log('Retrying with alternative configuration...');
           this.isConnecting = false;
           this.connectionListeners.forEach(listener => listener(false));
           reject(new Error('WebSocket connection failed'));

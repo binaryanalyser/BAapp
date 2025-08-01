@@ -26,7 +26,6 @@ interface ChartDataPoint {
 }
 
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
-  const [selectedSymbol, setSelectedSymbol] = useState('R_10');
   const [selectedSymbol, setSelectedSymbol] = useState('VIX10');
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');

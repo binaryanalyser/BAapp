@@ -6,9 +6,17 @@ import LiveTicks from '../components/Trading/LiveTicks';
 import { User } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
+  // All hooks must be called at the top level, before any conditional returns
   const { isAuthenticated, user, isLoading } = useAuth();
   const { isConnected, subscribeTo } = useWebSocket();
   const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
+
+  // useEffect must also be called before conditional returns
+  useEffect(() => {
+    if (isConnected) {
+      selectedSymbols.forEach(symbol => subscribeTo(symbol));
+    }
+  }, [isConnected, subscribeTo]);
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -29,12 +37,6 @@ const Dashboard: React.FC = () => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-
-  useEffect(() => {
-    if (isConnected) {
-      selectedSymbols.forEach(symbol => subscribeTo(symbol));
-    }
-  }, [isConnected, subscribeTo]);
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">

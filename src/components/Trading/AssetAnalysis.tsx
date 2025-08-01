@@ -26,7 +26,7 @@ interface MarketCondition {
 }
 
 const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
-  const { ticks } = useWebSocket();
+  const { ticks, subscribeTo } = useWebSocket();
   const [currentSignal, setCurrentSignal] = useState<AnalysisSignal | null>(null);
   const [marketCondition, setMarketCondition] = useState<MarketCondition | null>(null);
   const [priceHistory, setPriceHistory] = useState<number[]>([]);
@@ -36,10 +36,24 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
   const [analysisInterval, setAnalysisInterval] = useState<number>(5); // minutes
   const [nextAnalysisIn, setNextAnalysisIn] = useState<number>(0);
 
+  // Subscribe to WebSocket data for the selected symbol
+  useEffect(() => {
+    subscribeTo(selectedSymbol);
+  }, [selectedSymbol, subscribeTo]);
+
+  // Reset price history when symbol changes
+  useEffect(() => {
+    setPriceHistory([]);
+    setCurrentSignal(null);
+    setCountdown(0);
+    setLastAnalysisTime(0);
+    setNextAnalysisIn(0);
+  }, [selectedSymbol]);
+
   // Update price history when new ticks arrive
   useEffect(() => {
     const tick = ticks[selectedSymbol];
-    if (tick && tick.tick) {
+    if (tick && typeof tick.tick === 'number') {
       setPriceHistory(prev => {
         const newHistory = [...prev, tick.tick].slice(-100); // Keep last 100 prices
         return newHistory;

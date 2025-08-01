@@ -87,8 +87,49 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const [tradeSuccess, setTradeSuccess] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [barrier, setBarrier] = useState<string>('0');
+  
+  // Price movement tracking
+  const [priceMovement, setPriceMovement] = useState<'up' | 'down' | 'none'>('none');
+  const [previousPrice, setPreviousPrice] = useState<number>(0);
 
   const currentPrice = ticks[selectedAsset]?.price || 0;
+  
+  // Track price movement
+  useEffect(() => {
+    if (currentPrice > 0 && previousPrice > 0) {
+      if (currentPrice > previousPrice) {
+        setPriceMovement('up');
+      } else if (currentPrice < previousPrice) {
+        setPriceMovement('down');
+      } else {
+        setPriceMovement('none');
+      }
+    }
+    setPreviousPrice(currentPrice);
+  }, [currentPrice, previousPrice]);
+  
+  // Helper functions for price movement
+  const getPriceMovementClass = () => {
+    switch (priceMovement) {
+      case 'up':
+        return 'text-green-400 animate-bounce';
+      case 'down':
+        return 'text-red-400 animate-bounce';
+      default:
+        return 'text-white';
+    }
+  };
+  
+  const getPriceMovementIcon = () => {
+    switch (priceMovement) {
+      case 'up':
+        return <TrendingUp className="h-4 w-4 text-green-400 animate-pulse" />;
+      case 'down':
+        return <TrendingDown className="h-4 w-4 text-red-400 animate-pulse" />;
+      default:
+        return null;
+    }
+  };
 
   // Collect price history for analysis
   useEffect(() => {

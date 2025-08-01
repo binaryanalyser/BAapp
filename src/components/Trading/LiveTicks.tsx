@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Activity, TrendingUp, TrendingDown } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 
 interface LiveTicksProps {
   symbols: string[];
@@ -26,23 +27,18 @@ interface ChartDataPoint {
 }
 
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
+  const { ticks, subscribeTo, unsubscribeFrom, isConnected: wsContextConnected } = useWebSocket();
   const [selectedSymbol, setSelectedSymbol] = useState('R_10');
-  const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const [currentTick, setCurrentTick] = useState<TickData | null>(null);
   const [digits, setDigits] = useState<number[]>(Array(20).fill(0));
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [prices, setPrices] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [hasReceivedData, setHasReceivedData] = useState(false);
   
-  const wsRef = useRef<WebSocket | null>(null);
   // Tab state
   const [activeCategory, setActiveCategory] = useState('volatility');
-  
-  const subscriptionIdRef = useRef<string | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Extended digit history for analysis (up to 100+ digits)
   const [digitHistory, setDigitHistory] = useState<number[]>([]);
@@ -71,191 +67,50 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     return parseInt(fixedPrice.slice(-1));
   };
 
-  const connectWebSocket = () => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      return;
-    }
-
-    setConnectionStatus('connecting');
-    console.log('Connecting to WebSocket...');
-    
-    wsRef.current = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089&l=EN');
-    
-    wsRef.current.onopen = () => {
-      console.log('WebSocket connected');
-      setIsConnected(true);
+  // Update connection status based on WebSocket context
+  useEffect(() => {
+    if (wsContextConnected) {
       setConnectionStatus('connected');
-      setReconnectAttempts(0);
-      subscribeTo(selectedSymbol);
-    };
-
-    wsRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log('WebSocket message:', data);
-      
-      if (data.tick && data.echo_req?.ticks === selectedSymbol) {
-        console.log('Received tick for', selectedSymbol, ':', data.tick.quote);
-        const tickData: TickData = {
-          id: data.tick.id,
-          symbol: data.tick.symbol,
-          price: data.tick.quote,
-          epoch: data.tick.epoch,
-          quote: data.tick.quote
-        };
-        
-        setCurrentTick(tickData);
-        subscriptionIdRef.current = data.tick.id;
-        
-        // Request tick history only once when we first get a tick
-        if (prices.length === 0) {
-          console.log('Requesting tick history for', selectedSymbol);
-          wsRef.current?.send(JSON.stringify({
-            ticks_history: selectedSymbol,
-            end: 'latest',
-            start: 1,
-            style: 'ticks',
-            count: 101,
-            req_id: Math.floor(Math.random() * 1000000)
-          }));
-        }
-        
-        // Update live data immediately
-        const decimals = getDecimalPlaces(selectedSymbol);
-        const newDigit = getLastDigit(data.tick.quote, decimals);
-        
-        setHasReceivedData(true);
-        setDigits(prev => [...prev.slice(1), newDigit]);
-        setDigitHistory(prev => [...prev, newDigit].slice(-100)); // Keep last 100 digits
-        setPrices(prev => [...prev.slice(-19), data.tick.quote]);
-        setChartData(prev => [...prev.slice(-19), {
-          time: data.tick.epoch * 1000,
-          price: data.tick.quote,
-          timestamp: data.tick.epoch
-        }]);
-      }
-
-      if (data.history && data.echo_req?.ticks_history === selectedSymbol) {
-        console.log('Received history for', selectedSymbol, ':', data.history);
-        const history: HistoryData = data.history;
-        const decimals = getDecimalPlaces(selectedSymbol);
-        
-        // Process history data
-        const newPrices: number[] = [];
-        const newDigits: number[] = [];
-        const newDigitHistory: number[] = [];
-        const newChartData: ChartDataPoint[] = [];
-        
-        const displayLength = Math.min(20, history.prices.length);
-        const historyLength = Math.min(100, history.prices.length);
-        
-        // Process full history for analysis
-        for (let i = 0; i < historyLength; i++) {
-          const price = parseFloat(history.prices[history.prices.length - historyLength + i]);
-          newDigitHistory.push(getLastDigit(price, decimals));
-        }
-        
-        // Process recent data for display
-        for (let i = 0; i < displayLength; i++) {
-          const price = parseFloat(history.prices[history.prices.length - displayLength + i]);
-          const time = history.times[history.times.length - displayLength + i];
-          
-          newPrices.push(price);
-          newDigits.push(getLastDigit(price, decimals));
-          newChartData.push({
-            time: time * 1000,
-            price: price,
-            timestamp: time
-          });
-        }
-        
-        setPrices(newPrices);
-        setDigits(newDigits);
-        setDigitHistory(newDigitHistory);
-        setChartData(newChartData);
-        setHasReceivedData(true);
-        setIsLoading(false);
-        console.log('History processed, loading complete');
-      }
-
-      // Handle subscription confirmation
-      if (data.subscription && data.subscription.id) {
-        console.log('Subscription confirmed:', data.subscription.id);
-        subscriptionIdRef.current = data.subscription.id;
-      }
-
-      // Handle errors
-      if (data.error) {
-        console.error('WebSocket error:', data.error);
-        if (data.error.code === 'InvalidSymbol') {
-          console.log('Invalid symbol, trying alternative...');
-          // Try with frx prefix for some symbols
-          const altSymbol = selectedSymbol.startsWith('frx') ? selectedSymbol.slice(3) : `frx${selectedSymbol}`;
-          setTimeout(() => subscribeTo(altSymbol), 1000);
-        }
-      }
-    };
-
-    wsRef.current.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason);
-      setIsConnected(false);
-      setConnectionStatus('disconnected');
-      
-      // Reconnect with exponential backoff
-      if (reconnectAttempts < 5) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-        console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1})`);
-        
-        reconnectTimeoutRef.current = setTimeout(() => {
-          setReconnectAttempts(prev => prev + 1);
-          connectWebSocket();
-        }, delay);
-      }
-    };
-
-    wsRef.current.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setIsConnected(false);
-      setConnectionStatus('disconnected');
-    };
-  };
-
-  const subscribeTo = (symbol: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      // Unsubscribe from previous symbol
-      if (subscriptionIdRef.current) {
-        console.log('Unsubscribing from previous symbol');
-        wsRef.current?.send(JSON.stringify({
-          forget: subscriptionIdRef.current
-        }));
-      }
-      
-      // Subscribe to new symbol
-      console.log('Subscribing to', symbol);
-      wsRef.current.send(JSON.stringify({
-        ticks: symbol,
-        subscribe: 1,
-        req_id: Math.floor(Math.random() * 1000000)
-      }));
     } else {
-      console.log('WebSocket not ready, cannot subscribe to', symbol);
+      setConnectionStatus('disconnected');
     }
-  };
+  }, [wsContextConnected]);
 
+  // Handle tick data from WebSocket context
   useEffect(() => {
-    connectWebSocket();
-    
-    return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, []);
-
+    const tickData = ticks[selectedSymbol];
+    if (tickData) {
+      console.log('Received tick for', selectedSymbol, ':', tickData.price);
+      
+      const newTickData: TickData = {
+        id: tickData.id || '',
+        symbol: selectedSymbol,
+        price: tickData.price,
+        epoch: tickData.epoch || Date.now() / 1000,
+        quote: tickData.price
+      };
+      
+      setCurrentTick(newTickData);
+      
+      // Update live data immediately
+      const decimals = getDecimalPlaces(selectedSymbol);
+      const newDigit = getLastDigit(tickData.price, decimals);
+      
+      setHasReceivedData(true);
+      setDigits(prev => [...prev.slice(1), newDigit]);
+      setDigitHistory(prev => [...prev, newDigit].slice(-100)); // Keep last 100 digits
+      setPrices(prev => [...prev.slice(-19), tickData.price]);
+      setChartData(prev => [...prev.slice(-19), {
+        time: (tickData.epoch || Date.now() / 1000) * 1000,
+        price: tickData.price,
+        timestamp: tickData.epoch || Date.now() / 1000
+      }]);
+      
+      setIsLoading(false);
+    }
+  }, [ticks, selectedSymbol]);
   useEffect(() => {
-    if (isConnected) {
+    if (wsContextConnected) {
       setIsLoading(true);
       setHasReceivedData(false);
       setDigits([]);
@@ -265,7 +120,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       setCurrentTick(null);
       subscribeTo(selectedSymbol);
     }
-  }, [selectedSymbol, isConnected]);
+  }, [selectedSymbol, wsContextConnected, subscribeTo]);
 
   const handleSymbolChange = (symbol: string) => {
     console.log('Changing symbol to:', symbol);
@@ -484,7 +339,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
           <span className="text-sm text-gray-400">
             {connectionStatus === 'connected' ? 'Live' : 
              connectionStatus === 'connecting' ? 'Connecting...' : 
-             `Disconnected ${reconnectAttempts > 0 ? `(${reconnectAttempts}/5)` : ''}`}
+             'Disconnected'}
           </span>
         </div>
       </div>

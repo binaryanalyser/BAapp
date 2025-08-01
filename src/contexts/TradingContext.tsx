@@ -142,7 +142,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
 
           return {
             id: `deriv_${transaction.transaction_id}`,
-            symbol: transaction.underlying || 'Unknown',
+            symbol: transaction.underlying || transaction.symbol || 'R_10',
             type: contractType,
             stake: parseFloat(transaction.buy_price || '0'),
             payout: parseFloat(transaction.sell_price || '0'),
@@ -212,7 +212,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
 
           return {
             id: `deriv_open_${contract.contract_id}`,
-            symbol: contract.underlying || 'Unknown',
+            symbol: contract.underlying || contract.symbol || 'R_10',
             type: contractType,
             stake: parseFloat(contract.buy_price || '0'),
             payout: parseFloat(contract.payout || '0'),

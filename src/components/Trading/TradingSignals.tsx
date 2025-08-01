@@ -126,6 +126,229 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     return { trend, momentum, volatility };
   }, []);
 
+  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
+    action: 'BUY' | 'SELL' | null;
+    confidence: number;
+    reasoning: string;
+  } => {
+    const symbols = Object.keys(marketData);
+    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
+
+    let totalBullishSignals = 0;
+    let totalBearishSignals = 0;
+    let totalConfidence = 0;
+    let reasoningParts: string[] = [];
+
+    symbols.forEach(symbol => {
+      const data = marketData[symbol];
+      if (data.previousPrices.length < 20) return;
+
+      const rsi = calculateRSI(data.previousPrices);
+      const macd = calculateMACD(data.previousPrices);
+      const priceAction = analyzePriceAction(data.previousPrices);
+
+      // Analyze each symbol
+      if (rsi < 30 && macd === 'bullish') {
+        totalBullishSignals += 2;
+        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
+      } else if (rsi > 70 && macd === 'bearish') {
+        totalBearishSignals += 2;
+        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
+      }
+
+  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
+    action: 'BUY' | 'SELL' | null;
+    confidence: number;
+    reasoning: string;
+  } => {
+    const symbols = Object.keys(marketData);
+    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
+
+    let totalBullishSignals = 0;
+    let totalBearishSignals = 0;
+    let totalConfidence = 0;
+    let reasoningParts: string[] = [];
+
+    symbols.forEach(symbol => {
+      const data = marketData[symbol];
+      if (data.previousPrices.length < 20) return;
+
+      const rsi = calculateRSI(data.previousPrices);
+      const macd = calculateMACD(data.previousPrices);
+      const priceAction = analyzePriceAction(data.previousPrices);
+
+      // Analyze each symbol
+      if (rsi < 30 && macd === 'bullish') {
+        totalBullishSignals += 2;
+        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
+      } else if (rsi > 70 && macd === 'bearish') {
+        totalBearishSignals += 2;
+        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
+      }
+
+  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
+    action: 'BUY' | 'SELL' | null;
+    confidence: number;
+    reasoning: string;
+  } => {
+    const symbols = Object.keys(marketData);
+    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
+
+    let totalBullishSignals = 0;
+    let totalBearishSignals = 0;
+    let totalConfidence = 0;
+    let reasoningParts: string[] = [];
+
+    symbols.forEach(symbol => {
+      const data = marketData[symbol];
+      if (data.previousPrices.length < 20) return;
+
+      const rsi = calculateRSI(data.previousPrices);
+      const macd = calculateMACD(data.previousPrices);
+      const priceAction = analyzePriceAction(data.previousPrices);
+
+      // Analyze each symbol
+      if (rsi < 30 && macd === 'bullish') {
+        totalBullishSignals += 2;
+        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
+      } else if (rsi > 70 && macd === 'bearish') {
+        totalBearishSignals += 2;
+        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
+      }
+
+        setAiCountdown(remaining);
+        
+        // Clear recommendation when expired
+        if (remaining === 0) {
+          setAiRecommendation(null);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [aiRecommendation]);
+  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
+    action: 'BUY' | 'SELL' | null;
+    confidence: number;
+    reasoning: string;
+  } => {
+    const symbols = Object.keys(marketData);
+    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
+
+    let totalBullishSignals = 0;
+    let totalBearishSignals = 0;
+    let totalConfidence = 0;
+    let reasoningParts: string[] = [];
+
+    symbols.forEach(symbol => {
+      const data = marketData[symbol];
+      if (data.previousPrices.length < 20) return;
+
+      const rsi = calculateRSI(data.previousPrices);
+      const macd = calculateMACD(data.previousPrices);
+      const priceAction = analyzePriceAction(data.previousPrices);
+
+      // Analyze each symbol
+      if (rsi < 30 && macd === 'bullish') {
+        totalBullishSignals += 2;
+        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
+      } else if (rsi > 70 && macd === 'bearish') {
+        totalBearishSignals += 2;
+        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
+      }
+
+      } else if (rsi > 70) {
+        totalBearishSignals += 2;
+        symbolScore -= 2;
+        reasoningParts.push(`${symbol}: Overbought (RSI: ${rsi.toFixed(0)})`);
+      }
+
+      // MACD Analysis
+      if (macd === 'bullish') {
+        totalBullishSignals += 1;
+        symbolScore += 1;
+      } else if (macd === 'bearish') {
+        totalBearishSignals += 1;
+        symbolScore -= 1;
+      }
+
+      // Price Action Analysis
+      if (priceAction.trend === 'uptrend' && priceAction.momentum > 0.1) {
+        totalBullishSignals += 1;
+        symbolScore += 1;
+      } else if (priceAction.trend === 'downtrend' && priceAction.momentum < -0.1) {
+        totalBearishSignals += 1;
+        symbolScore -= 1;
+      }
+
+      // Bollinger Bands Analysis
+      if (bollinger === 'squeeze') {
+        totalConfidence += 10; // Volatility breakout expected
+        reasoningParts.push(`${symbol}: Volatility squeeze detected`);
+      }
+
+      totalConfidence += Math.abs(symbolScore) * 5;
+    });
+
+    if (analyzedSymbols === 0) {
+      return { action: 'NEUTRAL', confidence: 0, reasoning: 'Insufficient market data for analysis' };
+    }
+
+    // Determine overall recommendation
+    const netSignal = totalBullishSignals - totalBearishSignals;
+    const baseConfidence = Math.min(totalConfidence / analyzedSymbols, 95);
+    
+    let action: 'BUY' | 'SELL' | 'NEUTRAL';
+    let confidence: number;
+    let reasoning: string;
+
+    if (netSignal > 2) {
+      action = 'BUY';
+      confidence = Math.min(baseConfidence + (netSignal * 5), 95);
+      reasoning = `Bullish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
+    } else if (netSignal < -2) {
+      action = 'SELL';
+      confidence = Math.min(baseConfidence + (Math.abs(netSignal) * 5), 95);
+      reasoning = `Bearish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
+    } else {
+      action = 'NEUTRAL';
+      confidence = Math.max(baseConfidence - 20, 30);
+      reasoning = `Mixed signals across markets. ${analyzedSymbols} assets analyzed with conflicting indicators`;
+    }
+
+    return { action, confidence: Math.round(confidence), reasoning };
+  }, [calculateRSI, calculateMACD, analyzePriceAction, calculateBollingerBands]);
+
+  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
+    action: 'BUY' | 'SELL' | null;
+    confidence: number;
+    reasoning: string;
+  } => {
+    const symbols = Object.keys(marketData);
+    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
+
+    let totalBullishSignals = 0;
+    let totalBearishSignals = 0;
+    let totalConfidence = 0;
+    let reasoningParts: string[] = [];
+
+    symbols.forEach(symbol => {
+      const data = marketData[symbol];
+      if (data.previousPrices.length < 20) return;
+
+      const rsi = calculateRSI(data.previousPrices);
+      const macd = calculateMACD(data.previousPrices);
+      const priceAction = analyzePriceAction(data.previousPrices);
+
+      // Analyze each symbol
+      if (rsi < 30 && macd === 'bullish') {
+        totalBullishSignals += 2;
+        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
+      } else if (rsi > 70 && macd === 'bearish') {
+        totalBearishSignals += 2;
+        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
+      }
+
   const generateAdvancedSignal = useCallback((symbol: string, currentPrice: number, data: MarketData): Signal | null => {
     const { previousPrices } = data;
     
@@ -466,6 +689,39 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
       {/* Content Section */}
       <div className="p-6">
+                <div className={`text-3xl font-bold mb-2 ${
+                  aiRecommendation.action === 'BUY' ? 'text-green-400' :
+                  aiRecommendation.action === 'SELL' ? 'text-red-400' : 'text-blue-400'
+                }`}>
+                  {aiRecommendation.action}
+                </div>
+                <div className="text-lg font-bold text-white mb-1">{aiRecommendation.confidence}%</div>
+                <div className="text-xl font-mono text-yellow-400 bg-gray-700/50 px-3 py-2 rounded-lg">
+                  {formatCountdown(aiCountdown)}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {signalDuration}min analysis
+                </div>
+              </div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="mt-4">
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-1000 ${
+                    aiRecommendation.action === 'BUY' ? 'bg-green-400' :
+                    aiRecommendation.action === 'SELL' ? 'bg-red-400' : 'bg-blue-400'
+                  }`}
+                  style={{ 
+                    width: `${100 - (aiCountdown / (signalDuration * 60)) * 100}%` 
+                  }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {signals.length === 0 ? (
           <div className="text-center py-16">
             <div className="relative mb-8">

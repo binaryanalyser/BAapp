@@ -338,6 +338,43 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     return () => clearInterval(interval);
   }, []);
 
+  const getRecommendationIcon = (recommendation: Signal['recommendation']) => {
+    switch (recommendation) {
+      case 'BUY':
+        return <TrendingUp className="h-5 w-5 text-green-400" />;
+      case 'SELL':
+        return <TrendingDown className="h-5 w-5 text-red-400" />;
+      case 'HOLD':
+        return <Minus className="h-5 w-5 text-yellow-400" />;
+      default:
+        return null;
+    }
+  };
+
+  const getRecommendationColor = (recommendation: Signal['recommendation']) => {
+    switch (recommendation) {
+      case 'BUY':
+        return 'border-green-500 bg-green-500/10';
+      case 'SELL':
+        return 'border-red-500 bg-red-500/10';
+      case 'HOLD':
+        return 'border-yellow-500 bg-yellow-500/10';
+    }
+  };
+
+  const getStrengthColor = (strength: Signal['strength']) => {
+    switch (strength) {
+      case 'CRITICAL':
+        return 'text-red-400 animate-pulse';
+      case 'HIGH':
+        return 'text-green-400';
+      case 'MEDIUM':
+        return 'text-yellow-400';
+      case 'LOW':
+        return 'text-gray-400';
+    }
+  };
+
   const getSignalIcon = (type: Signal['type']) => {
     switch (type) {
       case 'CALL':
@@ -347,7 +384,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       case 'MATCH':
         return <Target className="h-5 w-5 text-blue-400" />;
       case 'DIFFER':
-        return <Minus className="h-5 w-5 text-yellow-400" />;
+        return <Activity className="h-5 w-5 text-yellow-400" />;
       default:
         return null;
     }
@@ -363,19 +400,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         return 'border-blue-500 bg-blue-500/10';
       case 'DIFFER':
         return 'border-yellow-500 bg-yellow-500/10';
-    }
-  };
-
-  const getStrengthColor = (strength: Signal['strength']) => {
-    switch (strength) {
-      case 'CRITICAL':
-        return 'text-red-400 animate-pulse';
-      case 'HIGH':
-        return 'text-green-400';
-      case 'MEDIUM':
-        return 'text-yellow-400';
-      case 'LOW':
-        return 'text-gray-400';
     }
   };
 
@@ -639,7 +663,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-400">Expiry:</span>
-                      <span className="text-white font-medium">{signal.expiry}</span>
+                      <span className="text-white font-medium">{new Date(signal.expiresAt).toLocaleTimeString()}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-400">Trend:</span>

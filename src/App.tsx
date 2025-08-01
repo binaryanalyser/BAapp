@@ -6,6 +6,7 @@ import { TradingProvider } from './contexts/TradingContext';
 import Header from './components/Layout/Header';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+import OAuthCallback from './pages/OAuthCallback';
 import TradingView from './pages/TradingView';
 import Analytics from './pages/Analytics';
 import { Toaster } from './components/UI/Toaster';
@@ -21,6 +22,7 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
           <Route path="/trading" element={<TradingView />} />
           <Route path="/analytics" element={<Analytics />} />
         </Routes>

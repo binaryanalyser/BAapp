@@ -99,6 +99,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setSupabaseUser(supabaseUserData);
           userData.supabaseId = supabaseUserData.id;
         }
+
+        // Save/update user in Supabase
+        const supabaseUserData = await supabaseService.createOrUpdateUser({
+          deriv_loginid: response.authorize.loginid,
+          deriv_token: authToken,
+          email: response.authorize.email,
+          fullname: response.authorize.fullname,
+          currency: response.authorize.currency,
+          balance: response.authorize.balance,
+          is_virtual: response.authorize.is_virtual === 1,
+          country: response.authorize.country
+        });
+
+        if (supabaseUserData) {
+          setSupabaseUser(supabaseUserData);
+          userData.supabaseId = supabaseUserData.id;
+        }
         setUser(userData);
         setToken(authToken);
         setIsAuthenticated(true);
@@ -113,15 +130,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           await supabaseService.createSession(supabaseUserData.id, sessionToken, expiresAt);
           localStorage.setItem('session_token', sessionToken);
         }
+        
+        // Create session in Supabase
+        if (supabaseUserData) {
+          const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+          await supabaseService.createSession(supabaseUserData.id, sessionToken, expiresAt);
+          localStorage.setItem('session_token', sessionToken);
+        }
       }
     } catch (error) {
       console.error('Authorization failed:', error);
       // Clear any saved token if authorization fails
       localStorage.removeItem('deriv_token');
       localStorage.removeItem('session_token');
+      localStorage.removeItem('session_token');
       setUser(null);
       setToken(null);
       setIsAuthenticated(false);
+      setSupabaseUser(null);
       setSupabaseUser(null);
     } finally {
       setIsLoading(false);
@@ -139,11 +166,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       supabaseService.deleteSession(sessionToken);
     }
     
+    // Clean up session in Supabase
+    const sessionToken = localStorage.getItem('session_token');
+    if (sessionToken) {
+      supabaseService.deleteSession(sessionToken);
+    }
+    
     setUser(null);
     setToken(null);
     setIsAuthenticated(false);
     setSupabaseUser(null);
+    setSupabaseUser(null);
     localStorage.removeItem('deriv_token');
+    localStorage.removeItem('session_token');
     localStorage.removeItem('session_token');
     derivAPI.disconnect();
   };
@@ -151,6 +186,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const updateBalance = (balance: number) => {
     if (user) {
       setUser({ ...user, balance });
+      
+      // Update balance in Supabase
+      if (supabaseUser) {
+        supabaseService.updateUserBalance(supabaseUser.id, balance);
+      }
       
       // Update balance in Supabase
       if (supabaseUser) {

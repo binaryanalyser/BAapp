@@ -45,6 +45,9 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
   const [analysisStatus, setAnalysisStatus] = useState<'analyzing' | 'ready' | 'generating'>('analyzing');
   const [lastAnalysis, setLastAnalysis] = useState<number>(Date.now());
+  const [signalDuration, setSignalDuration] = useState<number>(5); // Duration in minutes
+  const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(Date.now() + 5 * 60 * 1000);
+  const [analysisCountdown, setAnalysisCountdown] = useState<number>(0);
 
   // Advanced technical analysis functions
   const calculateRSI = useCallback((prices: number[], period: number = 14): number => {
@@ -234,6 +237,13 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   // Generate signals based on market analysis
   useEffect(() => {
     const generateSignals = () => {
+      const now = Date.now();
+      
+      // Only analyze if it's time for the next analysis
+      if (now < nextAnalysisTime) {
+        return;
+      }
+      
       setAnalysisStatus('analyzing');
       
       setTimeout(() => {
@@ -265,12 +275,28 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         
         setAnalysisStatus('ready');
         setLastAnalysis(Date.now());
+        
+        // Set next analysis time based on selected duration
+        const nextTime = Date.now() + (signalDuration * 60 * 1000);
+        setNextAnalysisTime(nextTime);
       }, 1500);
     };
 
+    // Check every 5 seconds if it's time to analyze
     const interval = setInterval(generateSignals, 5000);
     return () => clearInterval(interval);
-  }, [marketData, generateAdvancedSignal, selectedAsset]);
+  }, [marketData, generateAdvancedSignal, selectedAsset, signalDuration, nextAnalysisTime]);
+
+  // Update analysis countdown
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((nextAnalysisTime - now) / 1000));
+      setAnalysisCountdown(remaining);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [nextAnalysisTime]);
 
   // Update signal countdowns
   useEffect(() => {
@@ -278,12 +304,16 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       setSignals(prev => prev.map(signal => ({
         ...signal,
         countdown: Math.max(0, signal.countdown - 1),
-        isLive: signal.countdown > 0
-      })).filter(signal => signal.countdown > 0 || Date.now() - signal.timestamp < 60000));
+        isLive: true // Keep signals live for the entire duration
+      })).filter(signal => {
+        // Only remove signals after the analysis duration has passed
+        const signalAge = Date.now() - signal.timestamp;
+        return signalAge < (signalDuration * 60 * 1000);
+      }));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [signalDuration]);
 
   const getSignalIcon = (type: Signal['type']) => {
     switch (type) {
@@ -332,6 +362,21 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const formatAnalysisCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const durationOptions = [
+    { value: 1, label: '1 minute' },
+    { value: 2, label: '2 minutes' },
+    { value: 3, label: '3 minutes' },
+    { value: 5, label: '5 minutes' },
+    { value: 10, label: '10 minutes' },
+    { value: 15, label: '15 minutes' }
+  ];
+
   return (
     <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-xl border border-gray-600 shadow-2xl overflow-hidden">
       {/* Header Section */}
@@ -362,13 +407,41 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               ) : (
                 <>
                   <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
-                  <span className="text-sm text-green-400 font-medium">Live Analysis</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm text-green-400 font-medium">Live Analysis</span>
+                    {analysisCountdown > 0 && (
+                      <span className="text-xs text-gray-400">
+                        Next: {formatAnalysisCountdown(analysisCountdown)}
+                      </span>
+                    )}
+                  </div>
                 </>
               )}
             </div>
             
             {/* Stats */}
             <div className="hidden md:flex items-center space-x-4 text-sm">
+              {/* Duration Selector */}
+              <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
+                <select
+                  value={signalDuration}
+                  onChange={(e) => {
+                    const newDuration = parseInt(e.target.value);
+                    setSignalDuration(newDuration);
+                    // Reset next analysis time when duration changes
+                    setNextAnalysisTime(Date.now() + (newDuration * 60 * 1000));
+                  }}
+                  className="bg-transparent text-blue-400 font-bold text-sm focus:outline-none"
+                >
+                  {durationOptions.map(option => (
+                    <option key={option.value} value={option.value} className="bg-gray-800">
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="text-gray-400 text-xs">Duration</div>
+              </div>
+              
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
                 <div className="text-blue-400 font-bold">{signals.length}</div>
                 <div className="text-gray-400 text-xs">Active</div>
@@ -401,12 +474,27 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               AI Market Analysis in Progress
             </h4>
             <p className="text-gray-400 mb-4">
-              Advanced algorithms are processing {selectedAsset || 'market'} conditions...
+              Advanced algorithms are processing {selectedAsset || 'market'} conditions every {signalDuration} minute{signalDuration > 1 ? 's' : ''}...
             </p>
+            {analysisCountdown > 0 && (
+              <div className="mb-4">
+                <div className="text-lg font-mono text-yellow-400 mb-2">
+                  Next Analysis: {formatAnalysisCountdown(analysisCountdown)}
+                </div>
+                <div className="w-64 bg-gray-700 rounded-full h-2 mx-auto">
+                  <div 
+                    className="bg-blue-400 h-2 rounded-full transition-all duration-1000"
+                    style={{ 
+                      width: `${100 - (analysisCountdown / (signalDuration * 60)) * 100}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-center space-x-6 text-sm">
               <div className="flex items-center space-x-2">
                 <Activity className="h-4 w-4 text-blue-400" />
-                <span className="text-gray-300">Real-time Analysis</span>
+                <span className="text-gray-300">{signalDuration}min Analysis</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Target className="h-4 w-4 text-green-400" />
@@ -463,11 +551,16 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                       {signal.strength === 'CRITICAL' && <AlertCircle className="inline h-4 w-4 ml-1" />}
                     </div>
                     <div className="text-2xl font-bold text-white mb-1">{signal.confidence}%</div>
-                    {signal.isLive && (
-                      <div className="text-sm text-yellow-400 font-mono bg-gray-700/50 px-2 py-1 rounded">
-                        {formatCountdown(signal.countdown)}
+                    <div className="text-sm text-yellow-400 font-mono bg-gray-700/50 px-2 py-1 rounded">
+                      {(() => {
+                        const signalAge = Math.floor((Date.now() - signal.timestamp) / 1000);
+                        const remaining = Math.max(0, (signalDuration * 60) - signalAge);
+                        return formatCountdown(remaining);
+                      })()}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {signalDuration}min hold
                       </div>
-                    )}
                   </div>
                 </div>
                 

@@ -263,6 +263,53 @@ class DerivAPI {
     });
   }
 
+  async getStatement(options: {
+    description?: number;
+    limit?: number;
+    offset?: number;
+    date_from?: string;
+    date_to?: string;
+  } = {}): Promise<any> {
+    return this.sendRequest({
+      statement: 1,
+      description: options.description || 1,
+      limit: options.limit || 50,
+      offset: options.offset || 0,
+      ...(options.date_from && { date_from: options.date_from }),
+      ...(options.date_to && { date_to: options.date_to })
+    });
+  }
+
+  async getProfitTable(options: {
+    description?: number;
+    limit?: number;
+    offset?: number;
+    date_from?: string;
+    date_to?: string;
+    contract_type?: string[];
+  } = {}): Promise<any> {
+    return this.sendRequest({
+      profit_table: 1,
+      description: options.description || 1,
+      limit: options.limit || 50,
+      offset: options.offset || 0,
+      ...(options.date_from && { date_from: options.date_from }),
+      ...(options.date_to && { date_to: options.date_to }),
+      ...(options.contract_type && { contract_type: options.contract_type })
+    });
+  }
+
+  async getTransactions(options: {
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<any> {
+    return this.sendRequest({
+      transactions: 1,
+      limit: options.limit || 50,
+      offset: options.offset || 0
+    });
+  }
+
   disconnect(): void {
     // Clear all pending callbacks
     this.requestCallbacks.forEach(callback => {

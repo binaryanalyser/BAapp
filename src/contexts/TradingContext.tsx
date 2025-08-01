@@ -17,6 +17,11 @@ interface Trade {
   exitPrice?: number;
   contractId?: string;
   barrier?: string;
+  transactionId?: string;
+  purchaseTime?: number;
+  sellTime?: number;
+  longcode?: string;
+  shortcode?: string;
 }
 
 interface TradingStats {
@@ -37,6 +42,8 @@ interface TradingContextType {
   addTrade: (trade: Omit<Trade, 'id'>) => void;
   updateTrade: (id: string, updates: Partial<Trade>) => void;
   clearTrades: () => void;
+  loadTradingHistory: () => Promise<void>;
+  syncWithDeriv: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -58,7 +65,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expiryTimeouts, setExpiryTimeouts] = useState<Map<string, NodeJS.Timeout>>(new Map());
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   // Load trades from localStorage on mount
   useEffect(() => {
@@ -76,6 +83,13 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     loadTrades();
   }, []);
 
+  // Load trading history from Deriv when user logs in
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      loadTradingHistory();
+    }
+  }, [isAuthenticated, user]);
+
   // Save trades to localStorage whenever trades change
   useEffect(() => {
     localStorage.setItem('app_trades', JSON.stringify(trades));
@@ -87,6 +101,87 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       expiryTimeouts.forEach(timeout => clearTimeout(timeout));
     };
   }, [expiryTimeouts]);
+
+  const loadTradingHistory = async () => {
+    if (!isAuthenticated || !derivAPI.getConnectionStatus()) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Get profit table (completed trades)
+      const profitResponse = await derivAPI.getProfitTable({
+        limit: 100,
+        description: 1
+      });
+
+      if (profitResponse.profit_table && profitResponse.profit_table.transactions) {
+        const derivTrades = profitResponse.profit_table.transactions.map((transaction: any) => {
+          // Parse contract type from shortcode or longcode
+          let contractType: Trade['type'] = 'CALL';
+          const shortcode = transaction.shortcode || '';
+          const longcode = transaction.longcode || '';
+          
+          if (shortcode.includes('CALL') || longcode.toLowerCase().includes('rise')) {
+            contractType = 'CALL';
+          } else if (shortcode.includes('PUT') || longcode.toLowerCase().includes('fall')) {
+            contractType = 'PUT';
+          } else if (shortcode.includes('DIGITMATCH') || longcode.toLowerCase().includes('matches')) {
+            contractType = 'DIGITMATCH';
+          } else if (shortcode.includes('DIGITDIFF') || longcode.toLowerCase().includes('differs')) {
+            contractType = 'DIGITDIFF';
+          }
+
+          const profit = parseFloat(transaction.sell_price || '0') - parseFloat(transaction.buy_price || '0');
+          const status: Trade['status'] = profit > 0 ? 'won' : 'lost';
+
+          return {
+            id: `deriv_${transaction.transaction_id}`,
+            symbol: transaction.underlying || 'Unknown',
+            type: contractType,
+            stake: parseFloat(transaction.buy_price || '0'),
+            payout: parseFloat(transaction.sell_price || '0'),
+            profit: profit,
+            status: status,
+            entryTime: (transaction.purchase_time || Date.now() / 1000) * 1000,
+            exitTime: (transaction.sell_time || Date.now() / 1000) * 1000,
+            entryPrice: parseFloat(transaction.entry_tick || '0'),
+            exitPrice: parseFloat(transaction.exit_tick || '0'),
+            contractId: transaction.contract_id?.toString(),
+            transactionId: transaction.transaction_id?.toString(),
+            purchaseTime: transaction.purchase_time,
+            sellTime: transaction.sell_time,
+            longcode: transaction.longcode,
+            shortcode: transaction.shortcode,
+            duration: transaction.duration || 300
+          };
+        });
+
+        // Merge with existing app trades, avoiding duplicates
+        setTrades(prevTrades => {
+          const existingIds = new Set(prevTrades.map(trade => trade.id));
+          const newTrades = derivTrades.filter((trade: Trade) => !existingIds.has(trade.id));
+          
+          // Combine and sort by entry time (newest first)
+          const allTrades = [...prevTrades, ...newTrades].sort((a, b) => b.entryTime - a.entryTime);
+          
+          return allTrades;
+        });
+
+        console.log(`Loaded ${derivTrades.length} trades from Deriv history`);
+      }
+
+    } catch (error) {
+      console.error('Failed to load trading history from Deriv:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const syncWithDeriv = async () => {
+    await loadTradingHistory();
+  };
+
   const addTrade = (trade: Omit<Trade, 'id'>) => {
     const newTrade: Trade = {
       ...trade,
@@ -241,6 +336,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     addTrade,
     updateTrade,
     clearTrades,
+    loadTradingHistory,
+    syncWithDeriv,
     isLoading
   };
 

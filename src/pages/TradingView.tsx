@@ -6,16 +6,17 @@ import { useTradingContext } from '../contexts/TradingContext';
 import ErrorBoundary from '../components/UI/ErrorBoundary';
 import AssetAnalysis from '../components/Trading/AssetAnalysis';
 import AssetSelector from '../components/Trading/AssetSelector';
-import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause, RefreshCw, Download } from 'lucide-react';
 
 const TradingView: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
   const { isConnected, subscribeTo } = useWebSocket();
-  const { stats: tradingStats, trades } = useTradingContext();
+  const { stats: tradingStats, trades, loadTradingHistory, syncWithDeriv, isLoading: tradesLoading } = useTradingContext();
   const [selectedAsset, setSelectedAsset] = useState('R_10');
   const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
   const [activeTradeCountdowns, setActiveTradeCountdowns] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -67,6 +68,17 @@ const TradingView: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [trades]);
+
+  const handleSyncWithDeriv = async () => {
+    setIsSyncing(true);
+    try {
+      await syncWithDeriv();
+    } catch (error) {
+      console.error('Failed to sync with Deriv:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Filter trades based on active tab
   const openTrades = trades.filter(trade => trade.status === 'open');
@@ -199,8 +211,27 @@ const TradingView: React.FC = () => {
                   <History className="h-6 w-6 text-blue-400" />
                   <h3 className="text-xl font-semibold text-white">Trades</h3>
                 </div>
-                <div className="text-sm text-gray-400">
-                  {trades.length} total
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={handleSyncWithDeriv}
+                    disabled={isSyncing || tradesLoading}
+                    className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+                  >
+                    {isSyncing ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Syncing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        <span>Sync Deriv History</span>
+                      </>
+                    )}
+                  </button>
+                  <div className="text-sm text-gray-400">
+                    {trades.length} total
+                  </div>
                 </div>
               </div>
 

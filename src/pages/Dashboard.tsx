@@ -4,13 +4,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTradingContext } from '../contexts/TradingContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import LiveTicks from '../components/Trading/LiveTicks';
-import { User, TrendingUp, TrendingDown, Activity, DollarSign } from 'lucide-react';
+import { User, TrendingUp, TrendingDown, Activity, DollarSign, Download } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
-  const { stats: tradingStats } = useTradingContext();
+  const { stats: tradingStats, syncWithDeriv, isLoading: tradesLoading } = useTradingContext();
   const { isConnected, subscribeTo } = useWebSocket();
   const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Move useEffect to top level, before any conditional returns
   useEffect(() => {
@@ -38,6 +39,17 @@ const Dashboard: React.FC = () => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
+  const handleSyncWithDeriv = async () => {
+    setIsSyncing(true);
+    try {
+      await syncWithDeriv();
+    } catch (error) {
+      console.error('Failed to sync with Deriv:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const metrics = [
     {
@@ -86,6 +98,23 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="flex items-center justify-between">
             <p className="text-gray-400">Monitor your performance and analyze market trends</p>
+            <button
+              onClick={handleSyncWithDeriv}
+              disabled={isSyncing || tradesLoading}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+            >
+              {isSyncing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Syncing...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  <span>Sync Trading History</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 

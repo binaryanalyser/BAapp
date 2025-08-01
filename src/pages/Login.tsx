@@ -33,7 +33,17 @@ const Login: React.FC = () => {
       await login(token);
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      console.error('Login error:', err);
+      
+      // Provide more user-friendly error messages
+      if (errorMessage.includes('InvalidToken')) {
+        setError('Invalid API token. Please check your token and try again.');
+      } else if (errorMessage.includes('connection')) {
+        setError('Connection failed. Please check your internet connection and try again.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }

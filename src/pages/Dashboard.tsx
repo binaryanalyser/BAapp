@@ -23,9 +23,9 @@ const Dashboard: React.FC = () => {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading...</p>
+          <p className="text-white text-lg">Loading Dashboard...</p>
           <p className="text-gray-400 text-sm">
-            {user ? 'Loading dashboard...' : 'Checking authentication...'}
+            {user ? `Welcome back, ${user.loginid}` : 'Verifying your session...'}
           </p>
         </div>
       </div>

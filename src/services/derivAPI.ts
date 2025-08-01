@@ -70,6 +70,9 @@ class DerivAPI {
   private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${88454}`;
   private requestCallbacks = new Map<number, { resolve: Function; reject: Function; timeout: NodeJS.Timeout }>();
   private requestId = 1;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000;
 
   async connect(): Promise<void> {
     if (this.isConnected || this.isConnecting) {
@@ -85,6 +88,7 @@ class DerivAPI {
           console.log('WebSocket connected to Deriv API');
           this.isConnected = true;
           this.isConnecting = false;
+          this.reconnectAttempts = 0;
           this.connectionListeners.forEach(listener => listener(true));
           resolve();
         };
@@ -110,10 +114,21 @@ class DerivAPI {
         };
 
         this.ws.onclose = () => {
-          console.log('WebSocket connection closed');
+          console.log('WebSocket connection closed:', event.code, event.reason);
           this.isConnected = false;
           this.isConnecting = false;
           this.connectionListeners.forEach(listener => listener(false));
+          
+          // Auto-reconnect if not a clean close and we haven't exceeded max attempts
+          if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+            setTimeout(() => {
+              this.connect().catch(error => {
+                console.error('Reconnection failed:', error);
+              });
+            }, this.reconnectDelay * this.reconnectAttempts);
+          }
         };
       } catch (error) {
         this.isConnecting = false;
@@ -130,7 +145,9 @@ class DerivAPI {
       this.requestCallbacks.delete(data.req_id);
       
       if (data.error) {
-        callback.reject(new Error(data.error.message || 'API Error'));
+        const errorMessage = data.error.message || 'API Error';
+        console.error('API Error Response:', data.error);
+        callback.reject(new Error(errorMessage));
       } else {
         callback.resolve(data);
       }
@@ -142,6 +159,11 @@ class DerivAPI {
       if (data.error.message?.includes('already subscribed')) {
         console.warn('Subscription already exists:', data.error.message);
         return;
+      }
+      // Handle authorization errors specifically
+      if (data.error.code === 'InvalidToken') {
+        console.error('Invalid token detected, user needs to re-authenticate');
+        // Don't auto-logout here, let the auth context handle it
       }
       console.error('API Error:', data.error);
       return;
@@ -170,10 +192,21 @@ class DerivAPI {
   private sendRequest(request: any, timeout: number = 30000): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.isConnected || !this.ws) {
-        reject(new Error('WebSocket is not connected'));
+        // Try to reconnect if not connected
+        this.connect().then(() => {
+          // Retry the request after reconnection
+          this.sendRequestInternal(request, timeout, resolve, reject);
+        }).catch(error => {
+          reject(new Error('WebSocket is not connected and reconnection failed: ' + error.message));
+        });
         return;
       }
 
+      this.sendRequestInternal(request, timeout, resolve, reject);
+    });
+  }
+
+  private sendRequestInternal(request: any, timeout: number, resolve: Function, reject: Function): void {
       const reqId = this.requestId++;
       request.req_id = reqId;
 
@@ -184,11 +217,19 @@ class DerivAPI {
 
       this.requestCallbacks.set(reqId, { resolve, reject, timeout: timeoutHandle });
       this.ws.send(JSON.stringify(request));
-    });
   }
 
   async authorize(token: string): Promise<AuthResponse> {
-    return this.sendRequest({ authorize: token });
+    try {
+      const response = await this.sendRequest({ authorize: token });
+      if (response.error) {
+        throw new Error(response.error.message || 'Authorization failed');
+      }
+      return response;
+    } catch (error) {
+      console.error('Authorization request failed:', error);
+      throw error;
+    }
   }
 
   async getBalance(): Promise<BalanceResponse> {

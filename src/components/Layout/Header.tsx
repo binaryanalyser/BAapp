@@ -7,21 +7,7 @@ const Header: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isReconnecting, setIsReconnecting] = useState(false);
 
-  // Handle page visibility change to reconnect when tab becomes active
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && isAuthenticated) {
-        setIsReconnecting(true);
-        // Small delay to ensure connection is stable
-        setTimeout(() => setIsReconnecting(false), 2000);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isAuthenticated]);
 
   const navigation = [
     { name: 'Analysis', href: '/', icon: BarChart3 },
@@ -64,12 +50,6 @@ const Header: React.FC = () => {
           <div className="flex items-center space-x-4">
             {isAuthenticated && user ? (
               <div className="flex items-center space-x-4">
-                {isReconnecting && (
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-400"></div>
-                    <span className="text-xs text-blue-400">Reconnecting...</span>
-                  </div>
-                )}
                 <div className="text-right">
                   <div className="text-sm text-gray-300">{user.loginid}</div>
                   <div className="text-xs text-green-400">

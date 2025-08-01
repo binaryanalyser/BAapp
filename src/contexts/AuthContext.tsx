@@ -50,7 +50,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const savedToken = localStorage.getItem('deriv_token');
     if (savedToken) {
-      handleTokenLogin(savedToken);
+      handleTokenLogin(savedToken).catch(error => {
+        console.error('Failed to restore session:', error);
+        // Don't clear token immediately, let user try manual login
+        setIsLoading(false);
+      });
     } else {
       setIsLoading(false);
     }
@@ -63,6 +67,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Ensure connection is established
       if (!derivAPI.getConnectionStatus()) {
         await derivAPI.connect();
+        // Add a small delay to ensure connection is stable
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // Authorize with the token
@@ -85,14 +91,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Save token to localStorage
         localStorage.setItem('deriv_token', authToken);
+        console.log('Authentication successful for:', userData.loginid);
       }
     } catch (error) {
       console.error('Authorization failed:', error);
-      // Clear any saved token if authorization fails
-      localStorage.removeItem('deriv_token');
-      setUser(null);
-      setToken(null);
-      setIsAuthenticated(false);
+      // Only clear token if it's definitely invalid (not connection issues)
+      if (error instanceof Error && error.message.includes('InvalidToken')) {
+        localStorage.removeItem('deriv_token');
+        setUser(null);
+        setToken(null);
+        setIsAuthenticated(false);
+      } else {
+        // For connection issues, keep the token but set loading to false
+        console.warn('Connection issue during auth, keeping token for retry');
+      }
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +120,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     setIsAuthenticated(false);
     localStorage.removeItem('deriv_token');
-    derivAPI.disconnect();
+    // Don't disconnect API as it might be used by other parts of the app
+    console.log('User logged out');
   };
 
   const updateBalance = (balance: number) => {

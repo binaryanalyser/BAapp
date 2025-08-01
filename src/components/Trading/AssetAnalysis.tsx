@@ -6,9 +6,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTradingContext } from '../../contexts/TradingContext';
 
 interface AssetAnalysisProps {
-  selectedAsset: string;
+  selectedSymbol: string;
 }
-
 interface TechnicalIndicator {
   name: string;
   value: number;
@@ -51,10 +50,22 @@ interface AISignal {
   indicators: string[];
 }
 
-const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
+const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }) => {
+  // Early validation
+  if (!selectedSymbol || typeof selectedSymbol !== 'string') {
+    return (
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="text-center py-8">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-400" />
+          <p className="text-red-400">Invalid symbol selected</p>
+        </div>
+      </div>
+    );
+  }
+
   const { ticks } = useWebSocket();
   const { user } = useAuth();
-  const { addTrade, updateTrade } = useTradingContext();
+  const { addTrade, updateTrade, trades } = useTradingContext();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastAnalysis, setLastAnalysis] = useState<number>(Date.now());
   const [technicalIndicators, setTechnicalIndicators] = useState<TechnicalIndicator[]>([]);
@@ -80,6 +91,34 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const [isCollectingData, setIsCollectingData] = useState(true);
   
   // Quick Trade states
+  const [isLoadingProposal, setIsLoadingProposal] = useState(false);
+  const [proposalData, setProposalData] = useState<any>(null);
+  const [profitAnimation, setProfitAnimation] = useState(false);
+  
+  // Validate WebSocket context and tick data
+  if (!ticks) {
+    return (
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+          <p className="text-gray-400">Connecting to market data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const tickData = ticks[selectedSymbol];
+  if (!tickData || typeof tickData.price !== 'number') {
+    return (
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="text-center py-8">
+          <Activity className="h-12 w-12 mx-auto mb-4 text-yellow-400 animate-pulse" />
+          <p className="text-gray-400">Waiting for {selectedSymbol} tick data...</p>
+        </div>
+      </div>
+    );
+  }
+
   const [selectedContract, setSelectedContract] = useState('CALL');
   const [amount, setAmount] = useState<string>('10');
   const [duration, setDuration] = useState('5');
@@ -92,7 +131,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const [priceMovement, setPriceMovement] = useState<'up' | 'down' | 'none'>('none');
   const [previousPrice, setPreviousPrice] = useState<number>(0);
 
-  const currentPrice = ticks[selectedAsset]?.price || 0;
+  const currentPrice = tickData.price;
   
   // Track price movement
   useEffect(() => {
@@ -158,6 +197,14 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const potentialPayout = parseFloat(String(amount || '0')) * 1.85;
   const potentialProfit = potentialPayout - parseFloat(String(amount || '0'));
 
+  // Animate profit calculation
+  useEffect(() => {
+    if (amount) {
+      setProfitAnimation(true);
+      setTimeout(() => setProfitAnimation(false), 300);
+    }
+  }, [amount, selectedContract]);
+
   // Quick Trade functionality
   const contractTypes = [
     { 
@@ -190,7 +237,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
     try {
       console.log('Executing real trade:', {
         contractType,
-        symbol: selectedAsset,
+        symbol: selectedSymbol,
         amount: parseFloat(amount),
         duration: parseInt(duration),
         currentPrice
@@ -199,7 +246,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       // Get proposal first to get the contract details
       const proposalParams = {
         contract_type: contractType,
-        symbol: selectedAsset,
+        symbol: selectedSymbol,
         duration: parseInt(duration),
         duration_unit: 'm',
         amount: parseFloat(amount),
@@ -232,8 +279,8 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       console.log('Contract purchased successfully:', buyResponse.buy);
       
       const newTrade = {
-        symbol: selectedAsset,
-        type: contractType as 'CALLE' | 'PUTE' | 'DIGITMATCH' | 'DIGITDIFF',
+        symbol: selectedSymbol,
+        type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
         stake: parseFloat(amount),
         duration: parseInt(duration) * 60, // Convert minutes to seconds
         payout: buyResponse.buy.payout || (parseFloat(amount) * 1.85),
@@ -305,10 +352,11 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
             status: isWin ? 'won' : 'lost',
             exitTime: Date.now(),
             exitPrice: contract.exit_tick || currentPrice,
-            payout,
             profit
           });
         }
+        
+        const response = await derivAPI.getContractsFor(selectedSymbol);
       }
     } catch (error) {
       console.error('Failed to check trade status:', error);
@@ -855,7 +903,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       }
     }, 15000); // More frequent updates
     return () => clearInterval(interval);
-  }, [selectedAsset, currentPrice, isCollectingData, priceHistory.prices.length]);
+  }, [selectedSymbol, currentPrice, isCollectingData, priceHistory.prices.length]);
 
   const getSignalColor = (signal: string) => {
     switch (signal) {
@@ -901,7 +949,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
           )}
         </div>
         <div className="text-right">
-          <div className="text-lg font-bold text-white">{selectedAsset}</div>
+          <div className="text-lg font-bold text-white">{selectedSymbol}</div>
           <div className="text-sm text-gray-400">
             {isCollectingData ? 'Initializing...' : `Last: ${new Date(lastAnalysis).toLocaleTimeString()}`}
           </div>
@@ -971,220 +1019,232 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       )}
 
       {/* Quick Trade Section */}
-      <div className="mb-6 bg-gradient-to-br from-gray-800 via-gray-750 to-gray-800 rounded-xl p-8 border border-gray-600 shadow-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-2xl font-bold text-white flex items-center">
-            <div className="bg-blue-500/20 p-2 rounded-lg mr-3">
-              <Target className="h-6 w-6 text-blue-400" />
-            </div>
-            Quick Trade Terminal
-          </h4>
-          <div className="flex items-center space-x-1">
-            <div className="bg-green-500/20 px-3 py-1 rounded-full flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-sm text-green-400 font-medium">Live Market</span>
+      <div className="mb-6 bg-gradient-to-br from-gray-800 via-gray-850 to-gray-900 rounded-xl border border-gray-600 p-4 md:p-6 relative overflow-hidden shadow-2xl">
+        {/* Success overlay */}
+        {tradeSuccess && (
+          <div className="absolute inset-0 bg-green-500/10 border-2 border-green-400 rounded-xl animate-pulse z-10">
+            <div className="flex items-center justify-center h-full">
+              <div className="bg-gray-800 rounded-lg p-3 border border-green-400">
+                <div className="flex items-center space-x-2 text-green-400">
+                  <Zap className="h-4 w-4 animate-spin" />
+                  <span className="text-sm font-medium">Trade Active!</span>
+                  {countdown && (
+                    <span className="text-xs">
+                      {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
+        )}
+
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Target className="h-5 w-5 text-blue-400" />
+            <h3 className="text-lg font-semibold text-white">Quick Trade Terminal</h3>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-xs text-green-400 hidden sm:inline">Live</span>
+            </div>
+          </div>
+          {getPriceMovementIcon()}
         </div>
 
-        <div className="space-y-6">
-          {/* Amount Input */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div>
-              <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
-                <label className="block text-sm font-semibold text-gray-300 mb-4 flex items-center">
-                  <div className="bg-green-500/20 p-1.5 rounded-lg mr-2">
-                    <DollarSign className="h-4 w-4 text-green-400" />
-                  </div>
-                  Stake Amount
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-4 text-white text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-inner"
-                    placeholder="10.00"
-                    min="1"
-                    step="0.01"
-                  />
-                  <span className="absolute right-4 top-4 text-gray-400 text-lg font-medium">
-                    {user?.currency || 'USD'}
-                  </span>
+        <div className="space-y-4">
+          {/* Trade Parameters Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
+            {/* Stake Amount */}
+            <div className="bg-gradient-to-br from-green-500/10 to-green-600/5 rounded-xl p-4 border border-green-500/20 backdrop-blur-sm">
+              <div className="flex items-center space-x-2 mb-3">
+                <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
+                  <DollarSign className="h-3 w-3 text-green-400" />
                 </div>
-                <div className="grid grid-cols-4 gap-2 mt-4">
-                  {['5', '10', '25', '50'].map((quickAmount) => (
-                    <button
-                      key={quickAmount}
-                      onClick={() => setAmount(quickAmount)}
-                      className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-sm font-medium rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500 hover:shadow-lg transform hover:scale-105"
-                    >
-                      ${quickAmount}
-                    </button>
-                  ))}
-                </div>
+                <label className="text-xs font-medium text-green-300">Stake Amount</label>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full bg-gray-700/50 border border-green-500/30 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-300 backdrop-blur-sm"
+                  placeholder="10.00"
+                  min="1"
+                  step="0.01"
+                />
+                <span className="absolute right-3 top-2 text-gray-400 text-xs">
+                  {user?.currency || 'USD'}
+                </span>
+              </div>
+              {/* Quick amount buttons */}
+              <div className="flex space-x-1 mt-2">
+                {['5', '10', '25', '50'].map((quickAmount) => (
+                  <button
+                    key={quickAmount}
+                    onClick={() => setAmount(quickAmount)}
+                    className="flex-1 px-1 py-1 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 text-xs rounded transition-colors backdrop-blur-sm"
+                  >
+                    ${quickAmount}
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* Duration Selection */}
-            <div>
-              <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
-                <label className="block text-sm font-semibold text-gray-300 mb-4 flex items-center">
-                  <div className="bg-yellow-500/20 p-1.5 rounded-lg mr-2">
-                    <Clock className="h-4 w-4 text-yellow-400" />
-                  </div>
-                  Duration
-                </label>
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="w-full bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-4 text-white text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-inner"
-                >
-                  <option value="1">1 minute</option>
-                  <option value="2">2 minutes</option>
-                  <option value="3">3 minutes</option>
-                  <option value="5">5 minutes</option>
-                  <option value="10">10 minutes</option>
-                  <option value="15">15 minutes</option>
-                </select>
-                
-                {/* Duration Visual Indicator */}
-                <div className="mt-4 flex justify-center">
-                  <div className="bg-gray-800 rounded-lg px-4 py-2 border border-gray-600">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-yellow-400" />
-                      <span className="text-yellow-400 font-medium">{duration} min</span>
-                    </div>
-                  </div>
+            <div className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 rounded-xl p-4 border border-yellow-500/20 backdrop-blur-sm">
+              <div className="flex items-center space-x-2 mb-3">
+                <div className="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                  <Clock className="h-3 w-3 text-yellow-400" />
+                </div>
+                <label className="text-xs font-medium text-yellow-300">Duration</label>
+              </div>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                className="w-full bg-gray-700/50 border border-yellow-500/30 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all duration-300 backdrop-blur-sm"
+              >
+                <option value="1">1 minute</option>
+                <option value="2">2 minutes</option>
+                <option value="3">3 minutes</option>
+                <option value="5">5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+              </select>
+              <div className="mt-2 flex items-center justify-center">
+                <div className="flex items-center space-x-1 text-yellow-400">
+                  <Clock className="h-2 w-2" />
+                  <span className="text-xs hidden sm:inline">{duration}m expiry</span>
                 </div>
               </div>
             </div>
 
             {/* Current Price Display */}
-            <div>
-              <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
-                <label className="block text-sm font-semibold text-gray-300 mb-4 flex items-center">
-                  <div className="bg-blue-500/20 p-1.5 rounded-lg mr-2">
-                    <Activity className="h-4 w-4 text-blue-400" />
-                  </div>
-                  Current Price
-                </label>
-                <div className="text-center">
-                  <div className="flex items-center justify-center space-x-3 mb-3">
-                    <span className={`text-3xl font-bold font-mono transition-all duration-300 ${getPriceMovementClass()}`}>
-                      {currentPrice ? currentPrice.toFixed(4) : '---'}
-                    </span>
-                    {getPriceMovementIcon()}
-                  </div>
-                  <div className="text-sm text-gray-400 font-medium">{selectedAsset}</div>
+            <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 rounded-xl p-4 border border-blue-500/20 backdrop-blur-sm">
+              <div className="flex items-center space-x-2 mb-3">
+                <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
+                  <Activity className="h-3 w-3 text-blue-400" />
                 </div>
-                
-                {/* Price Movement Indicator */}
-                <div className="mt-4 flex justify-center">
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    priceMovement === 'up' ? 'bg-green-500/20 text-green-400' :
-                    priceMovement === 'down' ? 'bg-red-500/20 text-red-400' :
-                    'bg-gray-500/20 text-gray-400'
-                  }`}>
-                    {priceMovement === 'up' ? '↗ Rising' : 
-                     priceMovement === 'down' ? '↘ Falling' : '→ Stable'}
-                  </div>
+                <label className="text-xs font-medium text-blue-300">Current Price</label>
+              </div>
+              <div className="text-center">
+                <div className={`text-2xl font-mono font-bold transition-all duration-300 ${getPriceMovementClass()}`}>
+                  {currentPrice ? currentPrice.toFixed(4) : '---'}
+                </div>
+                <div className="flex items-center justify-center space-x-2 mt-2">
+                  {getPriceMovementIcon()}
+                  <span className="text-xs text-gray-400 hidden sm:inline">{selectedSymbol}</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Trade Summary */}
-          <div className="bg-gradient-to-r from-gray-700/30 to-gray-600/30 rounded-xl p-6 border border-gray-600/50 backdrop-blur-sm">
-            <h5 className="text-xl font-bold text-white mb-6 text-center flex items-center justify-center">
-              <div className="bg-purple-500/20 p-2 rounded-lg mr-3">
-                <BarChart3 className="h-5 w-5 text-purple-400" />
+          <div className="bg-gray-750/50 rounded-xl p-4 border border-gray-600/50 backdrop-blur-sm">
+            {isLoadingProposal && (
+              <div className="flex items-center justify-center py-3">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400 mr-2"></div>
+                <span className="text-sm text-gray-400">Getting live prices...</span>
               </div>
-              Trade Summary
-            </h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/50">
-                <div className="text-sm text-gray-400 mb-1">Asset</div>
-                <div className="text-lg font-bold text-white">{selectedAsset}</div>
-              </div>
-              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/50">
-                <div className="text-sm text-gray-400 mb-1">Stake</div>
-                <div className="text-lg font-bold text-white">{amount} {user?.currency}</div>
-              </div>
-              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/50">
-                <div className="text-sm text-gray-400 mb-1">Potential Payout</div>
-                <div className="text-lg font-bold text-green-400">
-                  {potentialPayout.toFixed(2)} {user?.currency}
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-800/50 rounded-lg p-3 backdrop-blur-sm">
+                <div className="text-xs text-gray-400 mb-1">Payout</div>
+                <div className={`text-base font-bold text-green-400 transition-all duration-300 ${profitAnimation ? 'animate-pulse scale-110' : ''}`}>
+                  ${potentialPayout.toFixed(2)}
                 </div>
               </div>
-              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/50">
-                <div className="text-sm text-gray-400 mb-1">Potential Profit</div>
-                <div className="text-lg font-bold text-green-400">+{potentialProfit.toFixed(2)} {user?.currency}</div>
+              <div className="bg-gray-800/50 rounded-lg p-3 backdrop-blur-sm">
+                <div className="text-xs text-gray-400 mb-1">Profit</div>
+                <div className={`text-base font-bold text-green-400 transition-all duration-300 ${profitAnimation ? 'animate-pulse scale-110' : ''}`}>
+                  +${potentialProfit.toFixed(2)}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Trade Action Buttons */}
-          <div className="max-w-2xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Trade Higher Button */}
-              <button
-                onClick={() => handleTradeAction('CALL')}
-                disabled={isTrading || !user || !currentPrice}
-                className="group disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-8 px-6 rounded-2xl transition-all duration-300 flex flex-col items-center justify-center space-y-3 transform hover:scale-105 active:scale-95 shadow-2xl hover:shadow-green-500/25 bg-gradient-to-br from-green-500 via-green-600 to-green-700 hover:from-green-600 hover:via-green-700 hover:to-green-800 border-2 border-green-400/20 hover:border-green-400/40 relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                {isTrading && selectedContract === 'CALL' ? (
-                  <>
-                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
-                    <span className="text-lg">Placing Trade...</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-white/20 p-3 rounded-full">
-                      <TrendingUp className="h-10 w-10 group-hover:animate-bounce" />
-                    </div>
-                    <span className="text-xl font-bold">TRADE HIGHER</span>
-                    <div className="flex items-center space-x-2">
-                      <Zap className="h-5 w-5 animate-pulse" />
-                      <span className="text-sm opacity-90">Call Option</span>
-                    </div>
-                  </>
-                )}
-              </button>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Trade Higher Button */}
+            <button
+              onClick={() => handleTradeAction('CALL')}
+              disabled={isTrading || !user || !currentPrice || isLoadingProposal}
+              className="group relative disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-3 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-1 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25 overflow-hidden"
+            >
+              {/* Shimmer effect */}
+              <div className="absolute inset-0 -top-10 -left-10 bg-gradient-to-r from-transparent via-white/10 to-transparent rotate-12 w-6 h-full opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity duration-700"></div>
+              
+              {isTrading && selectedContract === 'CALL' ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span className="text-sm">Placing...</span>
+                </>
+              ) : isLoadingProposal ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span className="text-sm">Loading...</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-1">
+                    <TrendingUp className="h-5 w-5 animate-bounce" />
+                  </div>
+                  <span className="text-base font-bold">Higher</span>
+                  <Zap className="h-3 w-3 animate-pulse opacity-75" />
+                </>
+              )}
+            </button>
 
-              {/* Trade Lower Button */}
-              <button
-                onClick={() => handleTradeAction('PUT')}
-                disabled={isTrading || !user || !currentPrice}
-                className="group disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-8 px-6 rounded-2xl transition-all duration-300 flex flex-col items-center justify-center space-y-3 transform hover:scale-105 active:scale-95 shadow-2xl hover:shadow-red-500/25 bg-gradient-to-br from-red-500 via-red-600 to-red-700 hover:from-red-600 hover:via-red-700 hover:to-red-800 border-2 border-red-400/20 hover:border-red-400/40 relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                {isTrading && selectedContract === 'PUT' ? (
-                  <>
-                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
-                    <span className="text-lg">Placing Trade...</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-white/20 p-3 rounded-full">
-                      <TrendingDown className="h-10 w-10 group-hover:animate-bounce" />
-                    </div>
-                    <span className="text-xl font-bold">TRADE LOWER</span>
-                    <div className="flex items-center space-x-2">
-                      <Zap className="h-5 w-5 animate-pulse" />
-                      <span className="text-sm opacity-90">Put Option</span>
-                    </div>
-                  </>
-                )}
-              </button>
+            {/* Trade Lower Button */}
+            <button
+              onClick={() => handleTradeAction('PUT')}
+              disabled={isTrading || !user || !currentPrice || isLoadingProposal}
+              className="group relative disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-3 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-1 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25 overflow-hidden"
+            >
+              {/* Shimmer effect */}
+              <div className="absolute inset-0 -top-10 -left-10 bg-gradient-to-r from-transparent via-white/10 to-transparent rotate-12 w-6 h-full opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity duration-700"></div>
+              
+              {isTrading && selectedContract === 'PUT' ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span className="text-sm">Placing...</span>
+                </>
+              ) : isLoadingProposal ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span className="text-sm">Loading...</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-1">
+                    <TrendingDown className="h-5 w-5 animate-bounce" />
+                  </div>
+                  <span className="text-base font-bold">Lower</span>
+                  <Zap className="h-3 w-3 animate-pulse opacity-75" />
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Status Messages */}
+          {!user && (
+            <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-xs">Please log in to place trades</span>
             </div>
-            
-            {/* Risk Warning */}
-            <div className="mt-4 text-center text-xs text-gray-500 bg-gray-800/30 rounded-lg p-3 border border-gray-700/50">
-              <AlertCircle className="inline h-4 w-4 mr-1" />
-              Trading involves risk. Only trade with money you can afford to lose.
+          )}
+
+          {(!currentPrice || !proposalData) && user && !isLoadingProposal && (
+            <div className="flex items-center justify-center space-x-2 text-sm text-yellow-400">
+              <Activity className="h-4 w-4 animate-pulse" />
+              <span className="text-xs">Waiting for market data...</span>
             </div>
+          )}
+
+          {/* Risk Warning */}
+          <div className="text-center">
+            <p className="text-xs text-gray-500 leading-relaxed hidden sm:block">
+              ⚠️ <strong>Risk Warning:</strong> Trading involves substantial risk of loss. Only trade with money you can afford to lose.
+            </p>
           </div>
         </div>
       </div>
@@ -1192,47 +1252,46 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       {/* Market Sentiment */}
       {!isCollectingData && (
         <div className="mb-6">
-        <h4 className="text-lg font-medium text-white mb-4 flex items-center">
-          <Activity className="h-4 w-4 mr-2 text-blue-400" />
-          Market Sentiment
-        </h4>
-        <div className="bg-gray-750 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-white font-medium">Overall: {marketSentiment.overall}</span>
-            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-              marketSentiment.overall === 'BULLISH' ? 'bg-green-500/20 text-green-400' :
-              marketSentiment.overall === 'BEARISH' ? 'bg-red-500/20 text-red-400' :
-              'bg-gray-500/20 text-gray-400'
-            }`}>
-              {marketSentiment.overall}
+          <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+            <Activity className="h-4 w-4 mr-2 text-blue-400" />
+            Market Sentiment
+          </h4>
+          <div className="bg-gray-750 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-white font-medium">Overall: {marketSentiment.overall}</span>
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                marketSentiment.overall === 'BULLISH' ? 'bg-green-500/20 text-green-400' :
+                marketSentiment.overall === 'BEARISH' ? 'bg-red-500/20 text-red-400' :
+                'bg-gray-500/20 text-gray-400'
+              }`}>
+                {marketSentiment.overall}
+              </div>
             </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-green-400">Bullish</span>
-              <span className="text-white">{marketSentiment.bullish.toFixed(1)}%</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-2">
-              <div 
-                className="h-2 rounded-full bg-green-400 transition-all duration-300"
-                style={{ width: `${marketSentiment.bullish}%` }}
-              ></div>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-red-400">Bearish</span>
-              <span className="text-white">{marketSentiment.bearish.toFixed(1)}%</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-2">
-              <div 
-                className="h-2 rounded-full bg-red-400 transition-all duration-300"
-                style={{ width: `${marketSentiment.bearish}%` }}
-              ></div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-green-400">Bullish</span>
+                <span className="text-white">{marketSentiment.bullish.toFixed(1)}%</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div 
+                  className="h-2 rounded-full bg-green-400 transition-all duration-300"
+                  style={{ width: `${marketSentiment.bullish}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-red-400">Bearish</span>
+                <span className="text-white">{marketSentiment.bearish.toFixed(1)}%</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div 
+                  className="h-2 rounded-full bg-red-400 transition-all duration-300"
+                  style={{ width: `${marketSentiment.bearish}%` }}
+                ></div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
-
     </div>
   );
 };

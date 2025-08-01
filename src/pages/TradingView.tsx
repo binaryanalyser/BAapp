@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useTradingContext } from '../contexts/TradingContext';
+import ErrorBoundary from '../components/UI/ErrorBoundary';
 import AssetAnalysis from '../components/Trading/AssetAnalysis';
 import AssetSelector from '../components/Trading/AssetSelector';
 import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause } from 'lucide-react';
@@ -54,6 +55,11 @@ const TradingView: React.FC = () => {
         const duration = trade.duration || 300; // Default 5 minutes
         const remaining = Math.max(0, duration - elapsed);
         newCountdowns[trade.id] = remaining;
+        
+        // Show expiry warning when 10 seconds left
+        if (remaining === 10 && remaining > 0) {
+          console.log(`Trade ${trade.symbol} ${trade.type} expiring in 10 seconds!`);
+        }
       });
       
       setActiveTradeCountdowns(newCountdowns);
@@ -180,7 +186,9 @@ const TradingView: React.FC = () => {
               selectedAsset={selectedAsset}
               onAssetChange={setSelectedAsset}
             />
-            <AssetAnalysis selectedAsset={selectedAsset} />
+            <ErrorBoundary>
+              <AssetAnalysis selectedSymbol={selectedAsset} />
+            </ErrorBoundary>
           </div>
 
           {/* Trade History - Full Width Below */}

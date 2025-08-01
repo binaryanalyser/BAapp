@@ -56,6 +56,7 @@ interface TradingProviderProps {
 export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [expiryTimeouts, setExpiryTimeouts] = useState<Map<string, NodeJS.Timeout>>(new Map());
 
   // Load trades from localStorage on mount
   useEffect(() => {
@@ -74,23 +75,113 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     localStorage.setItem('app_trades', JSON.stringify(trades));
   }, [trades]);
 
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      expiryTimeouts.forEach(timeout => clearTimeout(timeout));
+    };
+  }, [expiryTimeouts]);
   const addTrade = (trade: Omit<Trade, 'id'>) => {
     const newTrade: Trade = {
       ...trade,
       id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     };
     setTrades(prev => [newTrade, ...prev]);
+    
+    // Set up expiry timeout if trade has duration
+    if (newTrade.duration && newTrade.status === 'open') {
+      const timeoutId = setTimeout(() => {
+        expireTrade(newTrade.id);
+      }, newTrade.duration * 1000);
+      
+      setExpiryTimeouts(prev => new Map(prev).set(newTrade.id, timeoutId));
+    }
   };
 
   const updateTrade = (id: string, updates: Partial<Trade>) => {
     setTrades(prev => prev.map(trade => 
       trade.id === id ? { ...trade, ...updates } : trade
     ));
+    
+    // Clear timeout if trade is being closed manually
+    if (updates.status && updates.status !== 'open') {
+      const timeout = expiryTimeouts.get(id);
+      if (timeout) {
+        clearTimeout(timeout);
+        setExpiryTimeouts(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(id);
+          return newMap;
+        });
+      }
+    }
   };
 
+  const expireTrade = (tradeId: string) => {
+    setTrades(prev => prev.map(trade => {
+      if (trade.id === tradeId && trade.status === 'open') {
+        // Simulate trade result based on trade type and random market movement
+        const marketMovement = (Math.random() - 0.5) * 0.02; // -1% to +1% movement
+        let isWin = false;
+        
+        // Determine win/loss based on trade type
+        if (trade.type === 'CALL') {
+          isWin = marketMovement > 0;
+        } else if (trade.type === 'PUT') {
+          isWin = marketMovement < 0;
+        } else if (trade.type === 'DIGITMATCH') {
+          // For digit match, use random with slight bias
+          isWin = Math.random() > 0.6;
+        } else if (trade.type === 'DIGITDIFF') {
+          // For digit differs, use random with slight bias
+          isWin = Math.random() > 0.4;
+        }
+        
+        // Add some randomness to make it more realistic (70% accuracy)
+        if (Math.random() > 0.7) {
+          isWin = !isWin;
+        }
+        
+        const exitPrice = trade.entryPrice + (trade.entryPrice * marketMovement);
+        const payout = isWin ? trade.payout : 0;
+        const profit = payout - trade.stake;
+        
+        // Show notification
+        const notification = {
+          type: isWin ? 'success' : 'error',
+          title: isWin ? 'Trade Won! 🎉' : 'Trade Lost 😞',
+          message: `${trade.symbol} ${trade.type} - ${isWin ? '+' : ''}$${profit.toFixed(2)}`,
+          duration: 5000
+        };
+        
+        // You could dispatch this to a notification system
+        console.log('Trade Result:', notification);
+        
+        return {
+          ...trade,
+          status: isWin ? 'won' : 'lost',
+          exitTime: Date.now(),
+          exitPrice,
+          payout,
+          profit
+        };
+      }
+      return trade;
+    }));
+    
+    // Clean up timeout
+    setExpiryTimeouts(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(tradeId);
+      return newMap;
+    });
+  };
   const clearTrades = () => {
     setTrades([]);
     localStorage.removeItem('app_trades');
+    // Clear all timeouts
+    expiryTimeouts.forEach(timeout => clearTimeout(timeout));
+    setExpiryTimeouts(new Map());
   };
 
   // Calculate statistics from app trades only

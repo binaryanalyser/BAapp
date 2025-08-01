@@ -1,10 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Activity, TrendingUp, TrendingDown } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
-import { useWebSocket } from '../../contexts/WebSocketContext';
 
 interface LiveTicksProps {
   symbols: string[];
+}
+
+interface TickData {
+  id: string;
+  symbol: string;
+  tick: number;
+  epoch: number;
+  quote: number;
+}
+
+interface HistoryData {
+  times: number[];
+  prices: number[];
 }
 
 interface ChartDataPoint {
@@ -13,45 +25,34 @@ interface ChartDataPoint {
   timestamp: number;
 }
 
-interface DigitData {
-  digit: number;
-  movement: 'up' | 'down' | 'none';
-  isRecent: boolean;
-}
-
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
-  const { ticks, isConnected, subscribeTo } = useWebSocket();
   const [selectedSymbol, setSelectedSymbol] = useState('R_10');
-  const [digits, setDigits] = useState<DigitData[]>(Array(20).fill({ digit: 0, movement: 'none', isRecent: false }));
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [currentTick, setCurrentTick] = useState<TickData | null>(null);
+  const [digits, setDigits] = useState<number[]>(Array(20).fill(0));
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [prices, setPrices] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [hasReceivedData, setHasReceivedData] = useState(false);
   
+  const wsRef = useRef<WebSocket | null>(null);
   // Tab state
   const [activeCategory, setActiveCategory] = useState('volatility');
   
+  const subscriptionIdRef = useRef<string | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Extended digit history for analysis (up to 100+ digits)
   const [digitHistory, setDigitHistory] = useState<number[]>([]);
-  const [priceHistory, setPriceHistory] = useState<number[]>([]);
-
-  // Asset configurations based on digits.js
-  const assetConfigs = {
-    'R_100': { decimals: 2, label: '100' },
-    'R_10': { decimals: 3, label: '10' },
-    'R_25': { decimals: 3, label: '25' },
-    'R_50': { decimals: 4, label: '50' },
-    'R_75': { decimals: 4, label: '75' },
-    'RDBEAR': { decimals: 4, label: 'Bear' },
-    'RDBULL': { decimals: 4, label: 'Bull' }
-  };
 
   const volatilityIndices = [
-    { symbol: 'R_10', label: '10', name: 'Volatility 10 Index' },
-    { symbol: 'R_25', label: '25', name: 'Volatility 25 Index' },
-    { symbol: 'R_50', label: '50', name: 'Volatility 50 Index' },
-    { symbol: 'R_75', label: '75', name: 'Volatility 75 Index' },
-    { symbol: 'R_100', label: '100', name: 'Volatility 100 Index' }
+    { symbol: 'R_10', label: '10', name: 'Volatility 10', decimals: 3 },
+    { symbol: 'R_25', label: '25', name: 'Volatility 25', decimals: 3 },
+    { symbol: 'R_50', label: '50', name: 'Volatility 50', decimals: 4 },
+    { symbol: 'R_75', label: '75', name: 'Volatility 75', decimals: 4 },
+    { symbol: 'R_100', label: '100', name: 'Volatility 100', decimals: 2 }
   ];
 
   const categories = [
@@ -60,134 +61,239 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     { id: 'matchdiffers', label: 'MATCH/DIFFERS' }
   ];
 
-  // Get decimal places for symbol (based on digits.js xd variable)
-  const getDecimalPlaces = (symbol: string): number => {
-    return assetConfigs[symbol as keyof typeof assetConfigs]?.decimals || 4;
+  const getDecimalPlaces = (symbol: string) => {
+    const index = volatilityIndices.find(vi => vi.symbol === symbol);
+    return index?.decimals || 4;
   };
 
-  // Extract last digit from price (based on digits.js logic)
-  const getLastDigit = (price: number, decimals: number): number => {
+  const getLastDigit = (price: number, decimals: number) => {
     const fixedPrice = price.toFixed(decimals);
     return parseInt(fixedPrice.slice(-1));
   };
 
-  // Determine price movement direction (based on digits.js toggleDigit logic)
-  const getPriceMovement = (currentPrice: number, previousPrice: number): 'up' | 'down' | 'none' => {
-    if (currentPrice > previousPrice) return 'up';
-    if (currentPrice < previousPrice) return 'down';
-    return 'none';
-  };
-
-  // Subscribe to selected symbol when it changes or when connected
-  useEffect(() => {
-    if (isConnected) {
-      console.log('Subscribing to', selectedSymbol);
-      subscribeTo(selectedSymbol);
+  const connectWebSocket = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      return;
     }
-  }, [selectedSymbol, isConnected, subscribeTo]);
 
-  // Process tick data from context (based on digits.js ws.onmessage logic)
-  useEffect(() => {
-    const tick = ticks[selectedSymbol];
-    if (tick) {
-      console.log('Received tick for', selectedSymbol, ':', tick.tick);
+    setConnectionStatus('connecting');
+    console.log('Connecting to WebSocket...');
+    
+    wsRef.current = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089&l=EN');
+    
+    wsRef.current.onopen = () => {
+      console.log('WebSocket connected');
+      setIsConnected(true);
+      setConnectionStatus('connected');
+      setReconnectAttempts(0);
+      subscribeTo(selectedSymbol);
+    };
+
+    wsRef.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('WebSocket message:', data);
       
-      const decimals = getDecimalPlaces(selectedSymbol);
-      const currentPrice = tick.tick;
-      const newDigit = getLastDigit(currentPrice, decimals);
-      
-      setHasReceivedData(true);
-      setIsLoading(false);
-      
-      // Update price history
-      setPriceHistory(prev => {
-        const newHistory = [...prev, currentPrice];
-        return newHistory.slice(-21); // Keep last 21 prices (current + 20 previous)
-      });
-      
-      // Update digit history
-      setDigitHistory(prev => [...prev, newDigit].slice(-100));
-      
-      // Update digits array with movement detection (based on digits.js logic)
-      setDigits(prev => {
-        const newDigits = [...prev];
-        
-        // Shift all digits left and add new digit at the end
-        for (let i = 0; i < newDigits.length - 1; i++) {
-          newDigits[i] = {
-            ...newDigits[i + 1],
-            isRecent: false
-          };
-        }
-        
-        // Determine movement for new digit
-        let movement: 'up' | 'down' | 'none' = 'none';
-        if (priceHistory.length > 0) {
-          const previousPrice = priceHistory[priceHistory.length - 1];
-          movement = getPriceMovement(currentPrice, previousPrice);
-        }
-        
-        // Add new digit
-        newDigits[newDigits.length - 1] = {
-          digit: newDigit,
-          movement,
-          isRecent: true
+      if (data.tick && data.echo_req?.ticks === selectedSymbol) {
+        console.log('Received tick for', selectedSymbol, ':', data.tick.tick);
+        const tickData: TickData = {
+          id: data.tick.id,
+          symbol: data.tick.symbol,
+          tick: data.tick.tick,
+          epoch: data.tick.epoch,
+          quote: data.tick.quote
         };
         
-        return newDigits;
-      });
+        setCurrentTick(tickData);
+        subscriptionIdRef.current = data.tick.id;
+        
+        // Request tick history only once when we first get a tick
+        if (prices.length === 0) {
+          console.log('Requesting tick history for', selectedSymbol);
+          wsRef.current?.send(JSON.stringify({
+            ticks_history: selectedSymbol,
+            end: 'latest',
+            start: 1,
+            style: 'ticks',
+            count: 101,
+            req_id: Math.floor(Math.random() * 1000000)
+          }));
+        }
+        
+        // Update live data immediately
+        const decimals = getDecimalPlaces(selectedSymbol);
+        const newDigit = getLastDigit(data.tick.tick, decimals);
+        
+        setHasReceivedData(true);
+        setDigits(prev => [...prev.slice(1), newDigit]);
+        setDigitHistory(prev => [...prev, newDigit].slice(-100)); // Keep last 100 digits
+        setPrices(prev => [...prev.slice(-19), data.tick.tick]);
+        setChartData(prev => [...prev.slice(-19), {
+          time: data.tick.epoch * 1000,
+          price: data.tick.tick,
+          timestamp: data.tick.epoch
+        }]);
+      }
+
+      if (data.history && data.echo_req?.ticks_history === selectedSymbol) {
+        console.log('Received history for', selectedSymbol, ':', data.history);
+        const history: HistoryData = data.history;
+        const decimals = getDecimalPlaces(selectedSymbol);
+        
+        // Process history data
+        const newPrices: number[] = [];
+        const newDigits: number[] = [];
+        const newDigitHistory: number[] = [];
+        const newChartData: ChartDataPoint[] = [];
+        
+        const displayLength = Math.min(20, history.prices.length);
+        const historyLength = Math.min(100, history.prices.length);
+        
+        // Process full history for analysis
+        for (let i = 0; i < historyLength; i++) {
+          const price = parseFloat(history.prices[history.prices.length - historyLength + i]);
+          newDigitHistory.push(getLastDigit(price, decimals));
+        }
+        
+        // Process recent data for display
+        for (let i = 0; i < displayLength; i++) {
+          const price = parseFloat(history.prices[history.prices.length - displayLength + i]);
+          const time = history.times[history.times.length - displayLength + i];
+          
+          newPrices.push(price);
+          newDigits.push(getLastDigit(price, decimals));
+          newChartData.push({
+            time: time * 1000,
+            price: price,
+            timestamp: time
+          });
+        }
+        
+        setPrices(newPrices);
+        setDigits(newDigits);
+        setDigitHistory(newDigitHistory);
+        setChartData(newChartData);
+        setHasReceivedData(true);
+        setIsLoading(false);
+        console.log('History processed, loading complete');
+      }
+
+      // Handle subscription confirmation
+      if (data.subscription && data.subscription.id) {
+        console.log('Subscription confirmed:', data.subscription.id);
+        subscriptionIdRef.current = data.subscription.id;
+      }
+
+      // Handle errors
+      if (data.error) {
+        console.error('WebSocket error:', data.error);
+        if (data.error.code === 'InvalidSymbol') {
+          console.log('Invalid symbol, trying alternative...');
+          // Try with frx prefix for some symbols
+          const altSymbol = selectedSymbol.startsWith('frx') ? selectedSymbol.slice(3) : `frx${selectedSymbol}`;
+          setTimeout(() => subscribeTo(altSymbol), 1000);
+        }
+      }
+    };
+
+    wsRef.current.onclose = (event) => {
+      console.log('WebSocket closed:', event.code, event.reason);
+      setIsConnected(false);
+      setConnectionStatus('disconnected');
       
-      // Update chart data
-      setChartData(prev => [...prev.slice(-19), {
-        time: tick.epoch * 1000,
-        price: tick.tick,
-        timestamp: tick.epoch
-      }]);
+      // Reconnect with exponential backoff
+      if (reconnectAttempts < 5) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1})`);
+        
+        reconnectTimeoutRef.current = setTimeout(() => {
+          setReconnectAttempts(prev => prev + 1);
+          connectWebSocket();
+        }, delay);
+      }
+    };
+
+    wsRef.current.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setIsConnected(false);
+      setConnectionStatus('disconnected');
+    };
+  };
+
+  const subscribeTo = (symbol: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      // Unsubscribe from previous symbol
+      if (subscriptionIdRef.current) {
+        console.log('Unsubscribing from previous symbol');
+        wsRef.current?.send(JSON.stringify({
+          forget: subscriptionIdRef.current
+        }));
+      }
       
-      // Update prices for display
-      setPrices(prev => [...prev.slice(-19), tick.tick]);
+      // Subscribe to new symbol
+      console.log('Subscribing to', symbol);
+      wsRef.current.send(JSON.stringify({
+        ticks: symbol,
+        subscribe: 1,
+        req_id: Math.floor(Math.random() * 1000000)
+      }));
+    } else {
+      console.log('WebSocket not ready, cannot subscribe to', symbol);
     }
-  }, [ticks, selectedSymbol, priceHistory]);
+  };
+
+  useEffect(() => {
+    connectWebSocket();
+    
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isConnected) {
+      setIsLoading(true);
+      setHasReceivedData(false);
+      setDigits([]);
+      setDigitHistory([]);
+      setChartData([]);
+      setPrices([]);
+      setCurrentTick(null);
+      subscribeTo(selectedSymbol);
+    }
+  }, [selectedSymbol, isConnected]);
 
   const handleSymbolChange = (symbol: string) => {
     console.log('Changing symbol to:', symbol);
     setSelectedSymbol(symbol);
-    // Reset data when changing symbols
-    setDigits(Array(20).fill({ digit: 0, movement: 'none', isRecent: false }));
-    setDigitHistory([]);
-    setPriceHistory([]);
-    setChartData([]);
-    setPrices([]);
-    setHasReceivedData(false);
-    setIsLoading(true);
   };
 
-  // Get digit styling based on value and movement (based on digits.js CSS classes)
-  const getDigitStyling = (digitData: DigitData, index: number) => {
-    const { digit, movement, isRecent } = digitData;
+  const getDigitColor = (digit: number, index: number) => {
     const isEven = digit % 2 === 0;
-    const isLast5 = index >= 15; // Last 5 digits are more prominent
+    const isRecent = index >= 15; // Last 5 digits are more prominent
     
-    let baseClass = 'w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ';
-    
-    // Color based on even/odd
-    if (isLast5 || isRecent) {
-      baseClass += isEven ? 'bg-blue-500 text-white shadow-lg ' : 'bg-red-500 text-white shadow-lg ';
+    if (isRecent) {
+      return isEven ? 'bg-blue-500 text-white shadow-lg' : 'bg-red-500 text-white shadow-lg';
     } else {
-      baseClass += isEven ? 'bg-blue-400 text-white ' : 'bg-red-400 text-white ';
+      return isEven ? 'bg-blue-400 text-white' : 'bg-red-400 text-white';
     }
-    
-    // Movement animation classes (based on digits.js digits_moved_up/down)
-    if (movement === 'up') {
-      baseClass += 'animate-bounce border-2 border-green-400 ';
-    } else if (movement === 'down') {
-      baseClass += 'animate-bounce border-2 border-red-400 ';
-    }
-    
-    return baseClass;
   };
 
-  // Digit analysis functions (enhanced from original logic)
+  const getPriceMovement = (index: number) => {
+    if (index === 0 || prices.length < 2) return 'none';
+    const current = prices[index];
+    const previous = prices[index - 1];
+    
+    if (current > previous) return 'up';
+    if (current < previous) return 'down';
+    return 'none';
+  };
+
+  // Digit analysis functions
   const analyzeDigits = () => {
     if (digitHistory.length === 0) return null;
     
@@ -223,8 +329,22 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   };
 
   const analysis = analyzeDigits();
-  const currentPrice = ticks[selectedSymbol]?.tick || 0;
 
+  const getMovementClass = (movement: string) => {
+    switch (movement) {
+      case 'up':
+        return 'border-2 border-green-400';
+      case 'down':
+        return 'border-2 border-red-400';
+      default:
+        return '';
+    }
+  };
+
+  const currentPrice = currentTick?.tick || 0;
+  const decimals = getDecimalPlaces(selectedSymbol);
+  const currentDigit = currentPrice ? getLastDigit(currentPrice, decimals) : 0;
+  
   // Get content based on active category
   const getCategoryContent = () => {
     switch (activeCategory) {
@@ -234,7 +354,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
             {volatilityIndices.map((index) => (
               <button
                 key={index.symbol}
-                onClick={() => handleSymbolChange(index.symbol)}
+                onClick={() => setSelectedSymbol(index.symbol)}
                 className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                   selectedSymbol === index.symbol
                     ? 'bg-gray-900 text-white border border-gray-500'
@@ -273,7 +393,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                 </div>
               </div>
               
-              {/* Prediction based on imbalance */}
+              {/* Prediction */}
               {analysis && (
                 <div className="mt-4 p-3 bg-gray-800 rounded-lg">
                   <div className="flex items-center justify-between">
@@ -301,22 +421,15 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
             <div className="bg-gray-700 rounded-lg p-4 mb-4">
               <h4 className="text-white font-medium mb-3">Match/Differs Analysis</h4>
               
-              {/* Digit frequency display */}
+              {/* Digit Selection */}
               <div className="mb-4">
-                <label className="block text-sm text-gray-300 mb-2">Digit Frequency:</label>
+                <label className="block text-sm text-gray-300 mb-2">Select Target Digit:</label>
                 <div className="grid grid-cols-5 gap-2">
                   {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(digit => {
                     const count = analysis ? analysis.digitCounts[digit] : 0;
                     const percentage = analysis ? ((count / analysis.totalCount) * 100).toFixed(1) : '0';
-                    const isHottest = analysis && analysis.hottestNumbers.includes(digit);
-                    const isColdest = analysis && analysis.coldestNumbers.includes(digit);
-                    
                     return (
-                      <div key={digit} className={`text-center p-2 rounded border ${
-                        isHottest ? 'bg-red-600/20 border-red-500' :
-                        isColdest ? 'bg-blue-600/20 border-blue-500' :
-                        'bg-gray-800 border-gray-600'
-                      }`}>
+                      <div key={digit} className="text-center p-2 bg-gray-800 rounded border border-gray-600">
                         <div className="text-lg font-bold text-white">{digit}</div>
                         <div className="text-xs text-gray-400">{count}x</div>
                         <div className="text-xs text-gray-500">{percentage}%</div>
@@ -326,7 +439,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                 </div>
               </div>
               
-              {/* Match/Differs prediction */}
+              {/* Match/Differs Prediction */}
               {analysis && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-green-600/20 rounded-lg border border-green-500">
@@ -364,10 +477,14 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         <h3 className="text-xl font-semibold text-white">Live Ticks</h3>
         <div className="flex items-center space-x-2">
           <div className={`w-2 h-2 rounded-full ${
-            isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+            connectionStatus === 'connected' ? 'bg-green-400 animate-pulse' : 
+            connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' : 
+            'bg-red-400'
           }`}></div>
           <span className="text-sm text-gray-400">
-            {isConnected ? 'Live' : 'Disconnected'}
+            {connectionStatus === 'connected' ? 'Live' : 
+             connectionStatus === 'connecting' ? 'Connecting...' : 
+             `Disconnected ${reconnectAttempts > 0 ? `(${reconnectAttempts}/5)` : ''}`}
           </span>
         </div>
       </div>
@@ -396,37 +513,32 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
           <span className="ml-3 text-gray-400">
-            {!isConnected ? 'Connecting to market data...' : 'Loading tick data...'}
+            {connectionStatus === 'connecting' ? 'Connecting to market data...' : 'Loading tick data...'}
           </span>
         </div>
       ) : (
         <>
-          {/* Current Price Display */}
-          <div className="mb-4 text-center">
-            <div className="text-2xl font-bold text-white font-mono">
-              {currentPrice ? currentPrice.toFixed(getDecimalPlaces(selectedSymbol)) : '---'}
-            </div>
-            <div className="text-sm text-gray-400">{selectedSymbol} Current Price</div>
-          </div>
-
-          {/* Horizontal Digit Display (based on digits.js #digits) */}
+          {/* Horizontal Tick Display */}
           <div className="mb-6">
             <div className="flex items-center justify-center space-x-2 mb-4">
               <span className="text-sm text-gray-400">Last Digits:</span>
               <div className="flex space-x-1 overflow-x-auto">
-                {hasReceivedData && digits.map((digitData, index) => (
-                  <div
-                    key={index}
-                    className={getDigitStyling(digitData, index)}
-                  >
-                    {digitData.digit}
-                  </div>
-                ))}
+                {hasReceivedData && digits.map((digit, index) => {
+                  const movement = getPriceMovement(index);
+                  return (
+                    <div
+                      key={index}
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ${getDigitColor(digit, index)} ${getMovementClass(movement)}`}
+                    >
+                      {digit}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
 
-          {/* Mini Chart (based on digits.js CanvasJS chart) */}
+          {/* Mini Chart */}
           <div className="h-32 mb-4 bg-gray-750 rounded-lg p-2">
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -447,7 +559,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value: any) => [value.toFixed(getDecimalPlaces(selectedSymbol)), 'Price']}
+                    formatter={(value: any) => [value.toFixed(decimals), 'Price']}
                     labelFormatter={(time: any) => new Date(time).toLocaleTimeString()}
                     contentStyle={{
                       backgroundColor: '#1F2937',
@@ -517,6 +629,12 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
               </div>
             </div>
           )}
+          <div className="bg-gray-750 rounded-lg p-3">
+            <div className="text-lg font-bold text-blue-400">
+              {analysis ? analysis.evenCount : digits.filter(d => d % 2 === 0).length}
+            </div>
+            <div className="text-xs text-gray-400">Even</div>
+          </div>
         </>
       )}
     </div>

@@ -971,118 +971,184 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
       )}
 
       {/* Quick Trade Section */}
-      <div className="mb-6 bg-gray-750 rounded-lg p-6 border border-gray-600">
+      <div className="mb-6 bg-gradient-to-br from-gray-800 via-gray-750 to-gray-800 rounded-xl p-8 border border-gray-600 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-lg font-medium text-white flex items-center">
-            <Target className="h-5 w-5 mr-2 text-blue-400" />
-            Quick Trade
+          <h4 className="text-2xl font-bold text-white flex items-center">
+            <div className="bg-blue-500/20 p-2 rounded-lg mr-3">
+              <Target className="h-6 w-6 text-blue-400" />
+            </div>
+            Quick Trade Terminal
           </h4>
           <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="text-xs text-green-400">Live</span>
+            <div className="bg-green-500/20 px-3 py-1 rounded-full flex items-center space-x-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-sm text-green-400 font-medium">Live Market</span>
+            </div>
           </div>
         </div>
 
         <div className="space-y-6">
           {/* Amount Input */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div>
-            <label className="block text-sm font-medium text-gray-300 mb-3">
-              <DollarSign className="inline h-4 w-4 mr-1" />
-              Stake Amount
-            </label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white text-center text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
-              placeholder="10.00"
-              min="1"
-              step="0.01"
-            />
-            <div className="flex justify-center space-x-2 mt-3">
-              {['5', '10', '25', '50'].map((quickAmount) => (
-                <button
-                  key={quickAmount}
-                  onClick={() => setAmount(quickAmount)}
-                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors border border-gray-600 hover:border-gray-500"
+              <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
+                <label className="block text-sm font-semibold text-gray-300 mb-4 flex items-center">
+                  <div className="bg-green-500/20 p-1.5 rounded-lg mr-2">
+                    <DollarSign className="h-4 w-4 text-green-400" />
+                  </div>
+                  Stake Amount
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="w-full bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-4 text-white text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-inner"
+                    placeholder="10.00"
+                    min="1"
+                    step="0.01"
+                  />
+                  <span className="absolute right-4 top-4 text-gray-400 text-lg font-medium">
+                    {user?.currency || 'USD'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2 mt-4">
+                  {['5', '10', '25', '50'].map((quickAmount) => (
+                    <button
+                      key={quickAmount}
+                      onClick={() => setAmount(quickAmount)}
+                      className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-sm font-medium rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500 hover:shadow-lg transform hover:scale-105"
+                    >
+                      ${quickAmount}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Duration Selection */}
+            <div>
+              <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
+                <label className="block text-sm font-semibold text-gray-300 mb-4 flex items-center">
+                  <div className="bg-yellow-500/20 p-1.5 rounded-lg mr-2">
+                    <Clock className="h-4 w-4 text-yellow-400" />
+                  </div>
+                  Duration
+                </label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  className="w-full bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-4 text-white text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-inner"
                 >
-                  ${quickAmount}
-                </button>
-              ))}
+                  <option value="1">1 minute</option>
+                  <option value="2">2 minutes</option>
+                  <option value="3">3 minutes</option>
+                  <option value="5">5 minutes</option>
+                  <option value="10">10 minutes</option>
+                  <option value="15">15 minutes</option>
+                </select>
+                
+                {/* Duration Visual Indicator */}
+                <div className="mt-4 flex justify-center">
+                  <div className="bg-gray-800 rounded-lg px-4 py-2 border border-gray-600">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-4 w-4 text-yellow-400" />
+                      <span className="text-yellow-400 font-medium">{duration} min</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Current Price Display */}
+            <div>
+              <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
+                <label className="block text-sm font-semibold text-gray-300 mb-4 flex items-center">
+                  <div className="bg-blue-500/20 p-1.5 rounded-lg mr-2">
+                    <Activity className="h-4 w-4 text-blue-400" />
+                  </div>
+                  Current Price
+                </label>
+                <div className="text-center">
+                  <div className="flex items-center justify-center space-x-3 mb-3">
+                    <span className={`text-3xl font-bold font-mono transition-all duration-300 ${getPriceMovementClass()}`}>
+                      {currentPrice ? currentPrice.toFixed(4) : '---'}
+                    </span>
+                    {getPriceMovementIcon()}
+                  </div>
+                  <div className="text-sm text-gray-400 font-medium">{selectedAsset}</div>
+                </div>
+                
+                {/* Price Movement Indicator */}
+                <div className="mt-4 flex justify-center">
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    priceMovement === 'up' ? 'bg-green-500/20 text-green-400' :
+                    priceMovement === 'down' ? 'bg-red-500/20 text-red-400' :
+                    'bg-gray-500/20 text-gray-400'
+                  }`}>
+                    {priceMovement === 'up' ? '↗ Rising' : 
+                     priceMovement === 'down' ? '↘ Falling' : '→ Stable'}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Duration Selection */}
-            <div>
-            <label className="block text-sm font-medium text-gray-300 mb-3">
-              <Clock className="inline h-4 w-4 mr-1" />
-              Duration
-            </label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white text-center text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
-            >
-              <option value="1">1 minute</option>
-              <option value="2">2 minutes</option>
-              <option value="3">3 minutes</option>
-              <option value="5">5 minutes</option>
-              <option value="10">10 minutes</option>
-              <option value="15">15 minutes</option>
-            </select>
-          </div>
-          </div>
-
           {/* Trade Summary */}
-          <div className="max-w-md mx-auto bg-gray-700 rounded-lg p-6 border border-gray-600">
-            <h5 className="text-white font-medium mb-4 text-center">Trade Summary</h5>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Current Price:</span>
-                <div className="flex items-center space-x-2">
-                  <span className={`font-mono font-medium text-lg transition-all duration-300 ${getPriceMovementClass()}`}>
-                    {currentPrice ? currentPrice.toFixed(4) : '---'}
-                  </span>
-                  {getPriceMovementIcon()}
+          <div className="bg-gradient-to-r from-gray-700/30 to-gray-600/30 rounded-xl p-6 border border-gray-600/50 backdrop-blur-sm">
+            <h5 className="text-xl font-bold text-white mb-6 text-center flex items-center justify-center">
+              <div className="bg-purple-500/20 p-2 rounded-lg mr-3">
+                <BarChart3 className="h-5 w-5 text-purple-400" />
+              </div>
+              Trade Summary
+            </h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/50">
+                <div className="text-sm text-gray-400 mb-1">Asset</div>
+                <div className="text-lg font-bold text-white">{selectedAsset}</div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/50">
+                <div className="text-sm text-gray-400 mb-1">Stake</div>
+                <div className="text-lg font-bold text-white">{amount} {user?.currency}</div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/50">
+                <div className="text-sm text-gray-400 mb-1">Potential Payout</div>
+                <div className="text-lg font-bold text-green-400">
+                  {potentialPayout.toFixed(2)} {user?.currency}
                 </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Stake:</span>
-                <span className="text-white font-medium">{amount} {user?.currency}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Potential Payout:</span>
-                <span className="text-green-400 font-medium">
-                  {potentialPayout.toFixed(2)} {user?.currency}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Potential Profit:</span>
-                <span className="text-green-400 font-medium">+{potentialProfit.toFixed(2)} {user?.currency}</span>
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/50">
+                <div className="text-sm text-gray-400 mb-1">Potential Profit</div>
+                <div className="text-lg font-bold text-green-400">+{potentialProfit.toFixed(2)} {user?.currency}</div>
               </div>
             </div>
           </div>
 
           {/* Trade Action Buttons */}
-          <div className="max-w-md mx-auto">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Trade Higher Button */}
               <button
                 onClick={() => handleTradeAction('CALL')}
                 disabled={isTrading || !user || !currentPrice}
-                className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25"
+                className="group disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-8 px-6 rounded-2xl transition-all duration-300 flex flex-col items-center justify-center space-y-3 transform hover:scale-105 active:scale-95 shadow-2xl hover:shadow-green-500/25 bg-gradient-to-br from-green-500 via-green-600 to-green-700 hover:from-green-600 hover:via-green-700 hover:to-green-800 border-2 border-green-400/20 hover:border-green-400/40 relative overflow-hidden"
               >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                 {isTrading && selectedContract === 'CALL' ? (
                   <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    <span className="text-sm">Placing...</span>
+                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
+                    <span className="text-lg">Placing Trade...</span>
                   </>
                 ) : (
                   <>
-                    <TrendingUp className="h-8 w-8 animate-bounce" />
-                    <span className="text-lg">Trade Higher</span>
-                    <Zap className="h-4 w-4 animate-pulse" />
+                    <div className="bg-white/20 p-3 rounded-full">
+                      <TrendingUp className="h-10 w-10 group-hover:animate-bounce" />
+                    </div>
+                    <span className="text-xl font-bold">TRADE HIGHER</span>
+                    <div className="flex items-center space-x-2">
+                      <Zap className="h-5 w-5 animate-pulse" />
+                      <span className="text-sm opacity-90">Call Option</span>
+                    </div>
                   </>
                 )}
               </button>
@@ -1091,21 +1157,33 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
               <button
                 onClick={() => handleTradeAction('PUT')}
                 disabled={isTrading || !user || !currentPrice}
-                className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25"
+                className="group disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-8 px-6 rounded-2xl transition-all duration-300 flex flex-col items-center justify-center space-y-3 transform hover:scale-105 active:scale-95 shadow-2xl hover:shadow-red-500/25 bg-gradient-to-br from-red-500 via-red-600 to-red-700 hover:from-red-600 hover:via-red-700 hover:to-red-800 border-2 border-red-400/20 hover:border-red-400/40 relative overflow-hidden"
               >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                 {isTrading && selectedContract === 'PUT' ? (
                   <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    <span className="text-sm">Placing...</span>
+                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
+                    <span className="text-lg">Placing Trade...</span>
                   </>
                 ) : (
                   <>
-                    <TrendingDown className="h-8 w-8 animate-bounce" />
-                    <span className="text-lg">Trade Lower</span>
-                    <Zap className="h-4 w-4 animate-pulse" />
+                    <div className="bg-white/20 p-3 rounded-full">
+                      <TrendingDown className="h-10 w-10 group-hover:animate-bounce" />
+                    </div>
+                    <span className="text-xl font-bold">TRADE LOWER</span>
+                    <div className="flex items-center space-x-2">
+                      <Zap className="h-5 w-5 animate-pulse" />
+                      <span className="text-sm opacity-90">Put Option</span>
+                    </div>
                   </>
                 )}
               </button>
+            </div>
+            
+            {/* Risk Warning */}
+            <div className="mt-4 text-center text-xs text-gray-500 bg-gray-800/30 rounded-lg p-3 border border-gray-700/50">
+              <AlertCircle className="inline h-4 w-4 mr-1" />
+              Trading involves risk. Only trade with money you can afford to lose.
             </div>
           </div>
         </div>

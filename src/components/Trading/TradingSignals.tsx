@@ -35,6 +35,15 @@ interface MarketData {
   timestamp: number;
 }
 
+interface AIRecommendation {
+  action: 'BUY' | 'SELL' | 'NEUTRAL';
+  confidence: number;
+  reasoning: string;
+  startTime: number;
+  duration: number; // Duration in minutes
+  remainingTime: number; // Remaining time in seconds
+}
+
 interface TradingSignalsProps {
   selectedAsset?: string;
 }
@@ -43,22 +52,12 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   const { ticks } = useWebSocket();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
-  const [analysisStatus, setAnalysisStatus] = useState<'analyzing' | 'ready' | 'generating'>('analyzing');
-  const [lastAnalysis, setLastAnalysis] = useState<number>(Date.now());
+  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'analyzing' | 'active'>('idle');
   const [signalDuration, setSignalDuration] = useState<number>(5); // Duration in minutes
-  const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(Date.now() + 5 * 60 * 1000);
-  const [analysisCountdown, setAnalysisCountdown] = useState<number>(0);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
-  const [aiCountdown, setAiCountdown] = useState<number>(0);
-
-  // AI Recommendation state
-  const [aiRecommendation, setAiRecommendation] = useState<{
-    action: 'BUY' | 'SELL' | 'NEUTRAL' | null;
-    confidence: number;
-    reasoning: string;
-    startTime: number;
-    duration: number;
-  } | null>(null);
+  
+  // AI Recommendation state - now properly managed
+  const [aiRecommendation, setAiRecommendation] = useState<AIRecommendation | null>(null);
 
   // Advanced technical analysis functions
   const calculateRSI = useCallback((prices: number[], period: number = 14): number => {
@@ -129,12 +128,12 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   }, []);
 
   const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | 'NEUTRAL' | null;
+    action: 'BUY' | 'SELL' | 'NEUTRAL';
     confidence: number;
     reasoning: string;
   } => {
     const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
+    if (symbols.length === 0) return { action: 'NEUTRAL', confidence: 0, reasoning: 'No market data available' };
 
     let totalBullishSignals = 0;
     let totalBearishSignals = 0;
@@ -307,7 +306,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     };
   }, [calculateRSI, calculateMACD, calculateBollingerBands, analyzePriceAction]);
 
-  // Update market data and generate signals
+  // Update market data
   useEffect(() => {
     Object.entries(ticks).forEach(([symbol, tick]) => {
       if (!tick) return;
@@ -347,21 +346,29 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     }
   }, [marketData, isInitializing]);
 
-  // Perform AI Analysis
+  // Perform AI Analysis - only when no active recommendation or when current one expires
   const performAnalysis = useCallback(() => {
-    console.log('Starting AI Analysis...');
+    if (analysisStatus === 'analyzing') return; // Prevent multiple simultaneous analyses
+    
+    console.log(`Starting AI Analysis for ${signalDuration} minutes...`);
     setAnalysisStatus('analyzing');
     
     setTimeout(() => {
       // Generate AI Recommendation
       const recommendation = generateAIRecommendation(marketData);
-      setAiRecommendation(recommendation);
       
-      // Set countdown for the selected duration
-      const durationInSeconds = signalDuration * 60;
-      setAiCountdown(durationInSeconds);
+      const newAiRecommendation: AIRecommendation = {
+        action: recommendation.action,
+        confidence: recommendation.confidence,
+        reasoning: recommendation.reasoning,
+        startTime: Date.now(),
+        duration: signalDuration,
+        remainingTime: signalDuration * 60 // Convert to seconds
+      };
       
-      // Generate individual signals
+      setAiRecommendation(newAiRecommendation);
+      
+      // Generate individual signals (these are separate from the main AI recommendation)
       const symbolsToAnalyze = selectedAsset 
         ? [selectedAsset, ...Object.keys(marketData).filter(s => s !== selectedAsset)]
         : Object.keys(marketData);
@@ -384,67 +391,66 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         }
       });
       
-      setAnalysisStatus('ready');
-      setLastAnalysis(Date.now());
-      
-      console.log(`Analysis complete. Next analysis in ${signalDuration} minutes.`);
+      setAnalysisStatus('active');
+      console.log(`Analysis complete. AI recommendation: ${recommendation.action} for ${signalDuration} minutes.`);
     }, 2000);
-  }, [marketData, generateAIRecommendation, selectedAsset, signalDuration, generateAdvancedSignal]);
+  }, [marketData, generateAIRecommendation, selectedAsset, signalDuration, generateAdvancedSignal, analysisStatus]);
 
-  // Handle duration change
+  // Handle duration change - restart analysis immediately
   useEffect(() => {
     if (!isInitializing && Object.keys(marketData).length > 0) {
       console.log(`Duration changed to ${signalDuration} minutes. Restarting analysis...`);
-      performAnalysis();
+      // Clear current recommendation and restart
+      setAiRecommendation(null);
+      setAnalysisStatus('idle');
+      setTimeout(() => performAnalysis(), 500);
     }
-  }, [signalDuration, performAnalysis, isInitializing]);
+  }, [signalDuration]);
 
-  // AI Recommendation countdown
+  // AI Recommendation countdown and expiry management
   useEffect(() => {
-    if (aiCountdown > 0) {
-      const interval = setInterval(() => {
-        setAiCountdown(prev => {
-          const newCount = prev - 1;
-          if (newCount === 0) {
-            // Time to perform new analysis
-            setTimeout(() => performAnalysis(), 1000);
-          }
-          return newCount;
-        });
-      }, 1000);
+    if (!aiRecommendation || analysisStatus !== 'active') return;
 
-      return () => clearInterval(interval);
-    }
-  }, [aiCountdown, performAnalysis]);
-
-  // Update analysis countdown for display
-  useEffect(() => {
     const interval = setInterval(() => {
-      if (aiCountdown > 0) {
-        const remaining = aiCountdown;
-        setAnalysisCountdown(remaining);
-      }
+      setAiRecommendation(prev => {
+        if (!prev) return null;
+        
+        const newRemainingTime = prev.remainingTime - 1;
+        
+        if (newRemainingTime <= 0) {
+          // Recommendation expired, trigger new analysis
+          console.log('AI recommendation expired. Starting new analysis...');
+          setAnalysisStatus('idle');
+          setTimeout(() => performAnalysis(), 1000);
+          return null;
+        }
+        
+        return {
+          ...prev,
+          remainingTime: newRemainingTime
+        };
+      });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [aiCountdown]);
+  }, [aiRecommendation, analysisStatus, performAnalysis]);
 
-  // Update signal countdowns
+  // Update signal countdowns (these are independent of AI recommendation)
   useEffect(() => {
     const interval = setInterval(() => {
       setSignals(prev => prev.map(signal => ({
         ...signal,
         countdown: Math.max(0, signal.countdown - 1),
-        isLive: true // Keep signals live for the entire duration
+        isLive: true
       })).filter(signal => {
-        // Only remove signals after the analysis duration has passed
+        // Keep signals for a reasonable time
         const signalAge = Date.now() - signal.timestamp;
-        return signalAge < (signalDuration * 60 * 1000);
+        return signalAge < (10 * 60 * 1000); // 10 minutes max
       }));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [signalDuration]);
+  }, []);
 
   const getSignalIcon = (type: Signal['type']) => {
     switch (type) {
@@ -493,12 +499,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatAnalysisCountdown = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const durationOptions = [
     { value: 1, label: '1 minute' },
     { value: 2, label: '2 minutes' },
@@ -535,17 +535,20 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                   </div>
                   <span className="text-sm text-blue-400 font-medium">Analyzing Markets...</span>
                 </>
-              ) : (
+              ) : analysisStatus === 'active' && aiRecommendation ? (
                 <>
                   <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
                   <div className="flex flex-col">
-                    <span className="text-sm text-green-400 font-medium">Live Analysis</span>
-                    {analysisCountdown > 0 && (
-                      <span className="text-xs text-gray-400">
-                        Next: {formatAnalysisCountdown(analysisCountdown)}
-                      </span>
-                    )}
+                    <span className="text-sm text-green-400 font-medium">Active Signal</span>
+                    <span className="text-xs text-gray-400">
+                      {formatCountdown(aiRecommendation.remainingTime)} remaining
+                    </span>
                   </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+                  <span className="text-sm text-yellow-400 font-medium">Initializing...</span>
                 </>
               )}
             </div>
@@ -556,13 +559,9 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
                 <select
                   value={signalDuration}
-                  onChange={(e) => {
-                    const newDuration = parseInt(e.target.value);
-                    setSignalDuration(newDuration);
-                    // Reset next analysis time when duration changes
-                    setNextAnalysisTime(Date.now() + (newDuration * 60 * 1000));
-                  }}
+                  onChange={(e) => setSignalDuration(parseInt(e.target.value))}
                   className="bg-transparent text-blue-400 font-bold text-sm focus:outline-none"
+                  disabled={analysisStatus === 'analyzing'}
                 >
                   {durationOptions.map(option => (
                     <option key={option.value} value={option.value} className="bg-gray-800">
@@ -575,7 +574,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
                 <div className="text-blue-400 font-bold">{signals.length}</div>
-                <div className="text-gray-400 text-xs">Active</div>
+                <div className="text-gray-400 text-xs">Signals</div>
               </div>
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
                 <div className="text-green-400 font-bold">{Object.keys(marketData).length}</div>
@@ -589,7 +588,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       {/* Content Section */}
       <div className="p-6">
         {/* AI Recommendation Card */}
-        {aiRecommendation && (
+        {aiRecommendation && analysisStatus === 'active' && (
           <div className={`mb-6 rounded-xl border-2 p-6 ${
             aiRecommendation.action === 'BUY' ? 'border-green-500 bg-green-500/10' :
             aiRecommendation.action === 'SELL' ? 'border-red-500 bg-red-500/10' : 'border-blue-500 bg-blue-500/10'
@@ -621,10 +620,10 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                 </div>
                 <div className="text-lg font-bold text-white mb-1">{aiRecommendation.confidence}%</div>
                 <div className="text-xl font-mono text-yellow-400 bg-gray-700/50 px-3 py-2 rounded-lg">
-                  {formatCountdown(aiCountdown)}
+                  {formatCountdown(aiRecommendation.remainingTime)}
                 </div>
                 <div className="text-xs text-gray-400 mt-1">
-                  {signalDuration}min analysis
+                  {signalDuration}min signal
                 </div>
               </div>
             </div>
@@ -638,7 +637,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     aiRecommendation.action === 'SELL' ? 'bg-red-400' : 'bg-blue-400'
                   }`}
                   style={{ 
-                    width: `${100 - (aiCountdown / (signalDuration * 60)) * 100}%` 
+                    width: `${100 - (aiRecommendation.remainingTime / (signalDuration * 60)) * 100}%` 
                   }}
                 ></div>
               </div>
@@ -646,7 +645,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
           </div>
         )}
 
-        {signals.length === 0 ? (
+        {/* Loading/Initializing State */}
+        {(isInitializing || analysisStatus === 'analyzing' || (!aiRecommendation && analysisStatus !== 'active')) && (
           <div className="text-center py-16">
             <div className="relative mb-8">
               <div className="absolute inset-0 flex items-center justify-center">
@@ -662,30 +662,13 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
             <h4 className="text-xl font-semibold text-white mb-2">
               {isInitializing ? 'Initializing AI Analysis' : 
                analysisStatus === 'analyzing' ? 'AI Market Analysis in Progress' :
-               'Waiting for Next Analysis'}
+               'Preparing Analysis'}
             </h4>
             <p className="text-gray-400 mb-4">
               {isInitializing ? 'Setting up advanced market analysis algorithms...' :
-               analysisStatus === 'analyzing' ? `Analyzing ${selectedAsset || 'market'} conditions...` :
-               `Next analysis in ${formatAnalysisCountdown(analysisCountdown)} - signals update every ${signalDuration} minute${signalDuration > 1 ? 's' : ''}`}
+               analysisStatus === 'analyzing' ? `Analyzing ${selectedAsset || 'market'} conditions for ${signalDuration} minute${signalDuration > 1 ? 's' : ''}...` :
+               `Preparing ${signalDuration}-minute analysis cycle`}
             </p>
-            {analysisCountdown > 0 && !isInitializing && analysisStatus !== 'analyzing' && (
-              <div className="mb-4">
-                <div className="text-lg font-mono text-yellow-400 mb-2">
-                  {aiRecommendation ? 
-                    `Current: ${aiRecommendation.action} - ${formatAnalysisCountdown(analysisCountdown)}` :
-                    `Next Analysis: ${formatAnalysisCountdown(analysisCountdown)}`}
-                </div>
-                <div className="w-64 bg-gray-700 rounded-full h-2 mx-auto">
-                  <div 
-                    className="bg-blue-400 h-2 rounded-full transition-all duration-1000"
-                    style={{ 
-                      width: `${100 - (analysisCountdown / (signalDuration * 60)) * 100}%` 
-                    }}
-                  ></div>
-                </div>
-              </div>
-            )}
             <div className="flex items-center justify-center space-x-6 text-sm">
               <div className="flex items-center space-x-2">
                 <Activity className="h-4 w-4 text-blue-400" />
@@ -701,8 +684,17 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               </div>
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* Individual Signals */}
+        {signals.length > 0 && (
           <div className="space-y-4">
+            <div className="border-t border-gray-700 pt-6">
+              <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Activity className="h-5 w-5 mr-2 text-blue-400" />
+                Additional Market Signals
+              </h4>
+            </div>
             {signals.map((signal) => (
               <div
                 key={signal.id}
@@ -747,13 +739,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </div>
                     <div className="text-2xl font-bold text-white mb-1">{signal.confidence}%</div>
                     <div className="text-sm text-yellow-400 font-mono bg-gray-700/50 px-2 py-1 rounded">
-                      {(() => {
-                        const remaining = Math.max(0, aiCountdown);
-                        return formatCountdown(remaining);
-                      })()}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      {signalDuration}min hold
+                      {formatCountdown(signal.countdown)}
                     </div>
                   </div>
                 </div>

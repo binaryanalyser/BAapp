@@ -160,6 +160,14 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const potentialPayout = parseFloat(String(amount || '0')) * 1.85;
   const potentialProfit = potentialPayout - parseFloat(String(amount || '0'));
 
+  // Animate profit calculation
+  useEffect(() => {
+    if (amount) {
+      setProfitAnimation(true);
+      setTimeout(() => setProfitAnimation(false), 300);
+    }
+  }, [amount, selectedContract]);
+
   // Quick Trade functionality
   const contractTypes = [
     { 

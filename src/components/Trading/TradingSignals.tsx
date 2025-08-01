@@ -26,6 +26,8 @@ interface Signal {
     volatility: number;
   };
   remainingTime: number; // Remaining time in seconds
+  isLive?: boolean;
+  expiry?: string;
 }
 
 interface MarketData {
@@ -214,7 +216,9 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         volume: data.volume > 1.5 ? 'high' : data.volume > 0.8 ? 'normal' : 'low'
       },
       priceAction,
-      remainingTime: Math.floor(durationMs / 1000)
+      remainingTime: Math.floor(durationMs / 1000),
+      isLive: true,
+      expiry: new Date(now + durationMs).toLocaleTimeString()
     };
   }, [calculateRSI, calculateMACD, calculateBollingerBands, analyzePriceAction, signalDuration]);
 
@@ -375,21 +379,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     }
   };
 
-  const getSignalIcon = (type: Signal['type']) => {
-    switch (type) {
-      case 'CALL':
-        return <TrendingUp className="h-5 w-5 text-green-400" />;
-      case 'PUT':
-        return <TrendingDown className="h-5 w-5 text-red-400" />;
-      case 'MATCH':
-        return <Target className="h-5 w-5 text-blue-400" />;
-      case 'DIFFER':
-        return <Activity className="h-5 w-5 text-yellow-400" />;
-      default:
-        return null;
-    }
-  };
-
   const getSignalColor = (type: Signal['type']) => {
     switch (type) {
       case 'CALL':
@@ -400,6 +389,19 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
         return 'border-blue-500 bg-blue-500/10';
       case 'DIFFER':
         return 'border-yellow-500 bg-yellow-500/10';
+    }
+  };
+
+  const getSignalIcon = (type: Signal['type']) => {
+    switch (type) {
+      case 'CALL':
+        return <TrendingUp className="h-5 w-5 text-green-400" />;
+      case 'PUT':
+        return <TrendingDown className="h-5 w-5 text-red-400" />;
+      case 'MATCH':
+        return <Target className="h-5 w-5 text-blue-400" />;
+      case 'DIFFER':
+        return <Activity className="h-5 w-5 text-yellow-400" />;
     }
   };
 
@@ -420,7 +422,9 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     { value: 2, label: '2 minutes' },
     { value: 3, label: '3 minutes' },
     { value: 5, label: '5 minutes' },
+    { value: 7, label: '7 minutes' },
     { value: 10, label: '10 minutes' },
+    { value: 12, label: '12 minutes' },
     { value: 15, label: '15 minutes' }
   ];
 
@@ -470,15 +474,18 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
             <div className="hidden md:flex items-center space-x-4 text-sm">
               {/* Duration Selector */}
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
+                <label className="text-gray-400 text-xs block mb-1">Analysis Duration</label>
                 <select
                   value={signalDuration}
                   onChange={(e) => {
                     const newDuration = parseInt(e.target.value);
                     setSignalDuration(newDuration);
-                    // Reset next analysis time when duration changes
-                    setNextAnalysisTime(Date.now() + (newDuration * 60 * 1000));
+                    // Clear existing signals and reset analysis time
+                    setSignals([]);
+                    setNextAnalysisTime(Date.now() + 5000); // Start new analysis in 5 seconds
+                    setAnalysisStatus('waiting');
                   }}
-                  className="bg-transparent text-blue-400 font-bold text-sm focus:outline-none"
+                  className="bg-transparent text-blue-400 font-medium text-sm focus:outline-none w-full"
                 >
                   {durationOptions.map(option => (
                     <option key={option.value} value={option.value} className="bg-gray-800">
@@ -486,7 +493,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </option>
                   ))}
                 </select>
-                <div className="text-gray-400 text-xs">Duration</div>
               </div>
               
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
@@ -520,17 +526,20 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
             <h4 className="text-xl font-semibold text-white mb-2">
               AI Market Analysis in Progress
             </h4>
-            <p className="text-gray-400 mb-4">
-              Advanced algorithms are processing {selectedAsset || 'market'} conditions every {signalDuration} minute{signalDuration > 1 ? 's' : ''}...
+            <p className="text-gray-400 mb-6">
+              {analysisStatus === 'analyzing' 
+                ? 'Analyzing market conditions and generating signals...'
+                : `Next analysis in ${formatAnalysisCountdown(analysisCountdown)} - signals will hold for ${signalDuration} minute${signalDuration > 1 ? 's' : ''}`
+              }
             </p>
             {analysisCountdown > 0 && (
               <div className="mb-4">
-                <div className="text-lg font-mono text-yellow-400 mb-2">
+                <div className="text-2xl font-mono text-yellow-400 mb-3">
                   Next Analysis: {formatAnalysisCountdown(analysisCountdown)}
                 </div>
                 <div className="w-64 bg-gray-700 rounded-full h-2 mx-auto">
                   <div 
-                    className="bg-blue-400 h-2 rounded-full transition-all duration-1000"
+                    className="bg-gradient-to-r from-blue-400 to-purple-400 h-2 rounded-full transition-all duration-1000"
                     style={{ 
                       width: `${100 - (analysisCountdown / (signalDuration * 60)) * 100}%` 
                     }}
@@ -538,18 +547,18 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                 </div>
               </div>
             )}
-            <div className="flex items-center justify-center space-x-6 text-sm">
+            <div className="flex items-center justify-center space-x-8 text-sm">
               <div className="flex items-center space-x-2">
                 <Activity className="h-4 w-4 text-blue-400" />
-                <span className="text-gray-300">{signalDuration}min Analysis</span>
+                <span className="text-gray-300">{signalDuration}min Intervals</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Target className="h-4 w-4 text-green-400" />
-                <span className="text-gray-300">Pattern Recognition</span>
+                <span className="text-gray-300">Persistent Signals</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Brain className="h-4 w-4 text-purple-400" />
-                <span className="text-gray-300">ML Predictions</span>
+                <span className="text-gray-300">AI Analysis</span>
               </div>
             </div>
           </div>
@@ -663,7 +672,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-400">Expiry:</span>
-                      <span className="text-white font-medium">{new Date(signal.expiresAt).toLocaleTimeString()}</span>
+                      <span className="text-white font-medium">{signal.expiry}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-gray-400">Trend:</span>

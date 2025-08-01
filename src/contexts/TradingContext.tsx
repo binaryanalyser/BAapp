@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { derivAPI } from '../services/derivAPI';
+import { supabaseService } from '../services/supabaseService';
+import { useAuth } from './AuthContext';
 
 interface Trade {
   id: string;
@@ -57,18 +59,46 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expiryTimeouts, setExpiryTimeouts] = useState<Map<string, NodeJS.Timeout>>(new Map());
+  const { user } = useAuth();
 
   // Load trades from localStorage on mount
   useEffect(() => {
-    const savedTrades = localStorage.getItem('app_trades');
-    if (savedTrades) {
-      try {
-        setTrades(JSON.parse(savedTrades));
-      } catch (error) {
-        console.error('Failed to load trades from localStorage:', error);
+    const loadTrades = async () => {
+      if (user?.supabaseId) {
+        // Load trades from Supabase
+        const supabaseTrades = await supabaseService.getUserTrades(user.supabaseId);
+        const formattedTrades: Trade[] = supabaseTrades.map(trade => ({
+          id: trade.id,
+          symbol: trade.symbol,
+          type: trade.type,
+          stake: trade.stake,
+          duration: trade.duration,
+          payout: trade.payout,
+          profit: trade.profit,
+          status: trade.status,
+          entryTime: new Date(trade.entry_time).getTime(),
+          exitTime: trade.exit_time ? new Date(trade.exit_time).getTime() : undefined,
+          entryPrice: trade.entry_price || 0,
+          exitPrice: trade.exit_price,
+          contractId: trade.contract_id,
+          barrier: trade.barrier
+        }));
+        setTrades(formattedTrades);
+      } else {
+        // Fallback to localStorage for backward compatibility
+        const savedTrades = localStorage.getItem('app_trades');
+        if (savedTrades) {
+          try {
+            setTrades(JSON.parse(savedTrades));
+          } catch (error) {
+            console.error('Failed to load trades from localStorage:', error);
+          }
+        }
       }
-    }
-  }, []);
+    };
+
+    loadTrades();
+  }, [user?.supabaseId]);
 
   // Save trades to localStorage whenever trades change
   useEffect(() => {
@@ -88,6 +118,26 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     };
     setTrades(prev => [newTrade, ...prev]);
     
+    // Save to Supabase
+    if (user?.supabaseId) {
+      supabaseService.saveTrade({
+        user_id: user.supabaseId,
+        symbol: newTrade.symbol,
+        type: newTrade.type,
+        stake: newTrade.stake,
+        duration: newTrade.duration,
+        payout: newTrade.payout,
+        profit: newTrade.profit,
+        status: newTrade.status,
+        entry_time: new Date(newTrade.entryTime).toISOString(),
+        exit_time: newTrade.exitTime ? new Date(newTrade.exitTime).toISOString() : undefined,
+        entry_price: newTrade.entryPrice,
+        exit_price: newTrade.exitPrice,
+        contract_id: newTrade.contractId,
+        barrier: newTrade.barrier
+      });
+    }
+    
     // Set up expiry timeout if trade has duration
     if (newTrade.duration && newTrade.status === 'open') {
       const timeoutId = setTimeout(() => {
@@ -102,6 +152,20 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     setTrades(prev => prev.map(trade => 
       trade.id === id ? { ...trade, ...updates } : trade
     ));
+    
+    // Update in Supabase
+    if (user?.supabaseId) {
+      const supabaseUpdates: any = {};
+      if (updates.status) supabaseUpdates.status = updates.status;
+      if (updates.profit !== undefined) supabaseUpdates.profit = updates.profit;
+      if (updates.payout !== undefined) supabaseUpdates.payout = updates.payout;
+      if (updates.exitTime) supabaseUpdates.exit_time = new Date(updates.exitTime).toISOString();
+      if (updates.exitPrice !== undefined) supabaseUpdates.exit_price = updates.exitPrice;
+      
+      if (Object.keys(supabaseUpdates).length > 0) {
+        supabaseService.updateTrade(id, supabaseUpdates);
+      }
+    }
     
     // Clear timeout if trade is being closed manually
     if (updates.status && updates.status !== 'open') {
@@ -182,6 +246,9 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     // Clear all timeouts
     expiryTimeouts.forEach(timeout => clearTimeout(timeout));
     setExpiryTimeouts(new Map());
+    
+    // Note: We don't clear trades from Supabase as they should be preserved
+    // This function now only clears the local state
   };
 
   // Calculate statistics from app trades only

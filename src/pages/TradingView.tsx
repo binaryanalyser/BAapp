@@ -173,9 +173,9 @@ const TradingView: React.FC = () => {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="space-y-6">
           {/* Asset Selection */}
-          <div className="xl:col-span-2">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <AssetSelector 
               selectedAsset={selectedAsset}
               onAssetChange={setSelectedAsset}
@@ -183,8 +183,8 @@ const TradingView: React.FC = () => {
             <AssetAnalysis selectedAsset={selectedAsset} />
           </div>
 
-          {/* Trade History */}
-          <div className="xl:col-span-1">
+          {/* Trade History - Full Width Below */}
+          <div>
             <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-3">
@@ -219,9 +219,11 @@ const TradingView: React.FC = () => {
                   Closed Trades ({closedTrades.length})
                 </button>
               </div>
-              <div className="space-y-4 max-h-[800px] overflow-y-auto">
+              
+              {/* Trade Grid - Multiple columns on desktop */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
                 {displayTrades.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">
+                  <div className="col-span-full text-center py-8 text-gray-400">
                     <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No {activeTab} trades</p>
                     <p className="text-sm mt-1">

@@ -67,7 +67,7 @@ class DerivAPI {
   private connectionListeners: Array<(connected: boolean) => void> = [];
   private subscriptions = new Map<string, string>(); // symbol -> subscription_id
   private readonly APP_ID = '88454';
-  private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${this.APP_ID}`;
+  private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${88454}`;
   private requestCallbacks = new Map<number, { resolve: Function; reject: Function; timeout: NodeJS.Timeout }>();
   private requestId = 1;
 
@@ -261,6 +261,69 @@ class DerivAPI {
       contract_id: contractId,
       subscribe: 1
     });
+  }
+
+  async getStatement(options: {
+    description?: number;
+    limit?: number;
+    offset?: number;
+    date_from?: string;
+    date_to?: string;
+  } = {}): Promise<any> {
+    return this.sendRequest({
+      statement: 1,
+      description: options.description || 1,
+      limit: options.limit || 50,
+      offset: options.offset || 0,
+      ...(options.date_from && { date_from: options.date_from }),
+      ...(options.date_to && { date_to: options.date_to })
+    });
+  }
+
+  async getProfitTable(options: {
+    description?: number;
+    limit?: number;
+    offset?: number;
+    date_from?: string;
+    date_to?: string;
+    contract_type?: string[];
+  } = {}): Promise<any> {
+    return this.sendRequest({
+      profit_table: 1,
+      description: options.description || 1,
+      limit: options.limit || 50,
+      offset: options.offset || 0,
+      ...(options.date_from && { date_from: options.date_from }),
+      ...(options.date_to && { date_to: options.date_to }),
+      ...(options.contract_type && { contract_type: options.contract_type })
+    });
+  }
+
+  async getTransactions(options: {
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<any> {
+    return this.sendRequest({
+      transactions: 1,
+      limit: options.limit || 50,
+      offset: options.offset || 0
+    });
+  }
+
+  async getPortfolio(): Promise<any> {
+    return this.sendRequest({ portfolio: 1 });
+  }
+
+  async getProposalOpenContract(contractId: number): Promise<any> {
+    return this.sendRequest({ 
+      proposal_open_contract: 1,
+      contract_id: contractId,
+      subscribe: 1
+    });
+  }
+
+  async sellContract(contractId: number): Promise<any> {
+    return this.sendRequest({ sell: contractId });
   }
 
   disconnect(): void {

@@ -7,11 +7,14 @@ const Login: React.FC = () => {
   const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login, error } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleDerivLogin = () => {
-    const authUrl = 'https://oauth.deriv.com/oauth2/authorize?app_id=88454&affiliate_token=Yqc93056kqBB4VdSfJsOp2Nd7ZgqdRLk/1/';
+    // Store current URL for redirect after OAuth
+    localStorage.setItem('oauth_redirect_url', window.location.origin);
+    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&affiliate_token=Yqc93056kqBB4VdSfJsOp2Nd7ZgqdRLk/1/&redirect_uri=${encodeURIComponent(window.location.origin + '/oauth-callback')}`;
     window.location.href = authUrl;
   };
 
@@ -25,11 +28,12 @@ const Login: React.FC = () => {
     if (!token.trim()) return;
 
     setIsLoading(true);
+    setError(null);
     try {
       await login(token);
       navigate('/');
     } catch (err) {
-      // Error is handled by the auth context
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setIsLoading(false);
     }

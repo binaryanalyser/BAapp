@@ -46,13 +46,11 @@ const Dashboard: React.FC = () => {
             <User className="h-8 w-8 text-blue-400" />
             <h1 className="text-3xl font-bold text-white">Welcome, {user?.loginid}! Analysis Overview</h1>
           </div>
-          <div className="flex items-center justify-between">
-            <p className="text-gray-400">Monitor your performance and analyze market trends</p>
-          </div>
+          <p className="text-gray-400">Real-time market analysis and live tick data</p>
         </div>
 
         {/* Live Ticks */}
-        <div className="grid grid-cols-1 gap-6 mt-6">
+        <div className="grid grid-cols-1 gap-6">
           <LiveTicks symbols={selectedSymbols} />
         </div>
       </div>

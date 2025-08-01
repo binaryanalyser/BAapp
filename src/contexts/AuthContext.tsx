@@ -41,25 +41,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Initialize WebSocket connection
+  useEffect(() => {
+    derivAPI.connect().catch(console.error);
+  }, []);
+
   // Check for saved token on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('deriv_token');
     if (savedToken) {
-      // Wait for derivAPI connection before attempting authorization
-      const checkConnection = () => {
-        if (derivAPI.getConnectionStatus()) {
-          handleTokenLogin(savedToken);
-        } else {
-          // Listen for connection status changes
-          derivAPI.onConnection((connected) => {
-            if (connected && savedToken) {
-              handleTokenLogin(savedToken);
-            }
-          });
-        }
-      };
-      
-      checkConnection();
+      handleTokenLogin(savedToken);
     } else {
       setIsLoading(false);
     }
@@ -68,6 +59,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const handleTokenLogin = async (authToken: string) => {
     try {
       setIsLoading(true);
+      
+      // Ensure connection is established
+      if (!derivAPI.getConnectionStatus()) {
+        await derivAPI.connect();
+      }
       
       // Authorize with the token
       const response: AuthResponse = await derivAPI.authorize(authToken);
@@ -97,15 +93,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       setToken(null);
       setIsAuthenticated(false);
-      throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
   const login = async (authToken: string) => {
-    // Explicitly connect when user provides a new token
-    await derivAPI.connect();
     await handleTokenLogin(authToken);
   };
 

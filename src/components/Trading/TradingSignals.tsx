@@ -58,6 +58,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     duration: number;
   } | null>(null);
 
+  const [aiCountdown, setAiCountdown] = useState<number>(0);
+
   // Advanced technical analysis functions
   const calculateRSI = useCallback((prices: number[], period: number = 14): number => {
     if (prices.length < period + 1) return 50;
@@ -127,12 +129,12 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   }, []);
 
   const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
+    action: 'BUY' | 'SELL' | 'NEUTRAL';
     confidence: number;
     reasoning: string;
   } => {
     const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
+    if (symbols.length === 0) return { action: 'NEUTRAL', confidence: 0, reasoning: 'No market data available' };
 
     let totalBullishSignals = 0;
     let totalBearishSignals = 0;
@@ -149,8 +151,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
       const rsi = calculateRSI(data.previousPrices);
       const macd = calculateMACD(data.previousPrices);
-      const bollinger = calculateBollingerBands(data.previousPrices);
       const priceAction = analyzePriceAction(data.previousPrices);
+      const bollinger = calculateBollingerBands(data.previousPrices);
 
       // RSI Analysis
       if (rsi < 30) {
@@ -191,14 +193,14 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     });
 
     if (analyzedSymbols === 0) {
-      return { action: null, confidence: 0, reasoning: 'Insufficient market data for analysis' };
+      return { action: 'NEUTRAL', confidence: 0, reasoning: 'Insufficient market data for analysis' };
     }
 
     // Determine overall recommendation
     const netSignal = totalBullishSignals - totalBearishSignals;
     const baseConfidence = Math.min(totalConfidence / analyzedSymbols, 95);
     
-    let action: 'BUY' | 'SELL' | null;
+    let action: 'BUY' | 'SELL' | 'NEUTRAL';
     let confidence: number;
     let reasoning: string;
 
@@ -211,13 +213,34 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       confidence = Math.min(baseConfidence + (Math.abs(netSignal) * 5), 95);
       reasoning = `Bearish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
     } else {
-      action = null;
+      action = 'NEUTRAL';
       confidence = Math.max(baseConfidence - 20, 30);
       reasoning = `Mixed signals across markets. ${analyzedSymbols} assets analyzed with conflicting indicators`;
     }
 
     return { action, confidence: Math.round(confidence), reasoning };
   }, [calculateRSI, calculateMACD, analyzePriceAction, calculateBollingerBands]);
+
+  // Update AI recommendation countdown
+  useEffect(() => {
+    if (!aiRecommendation) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - aiRecommendation.startTime;
+      const remaining = Math.max(0, Math.ceil((aiRecommendation.duration - elapsed) / 1000));
+      
+      if (remaining > 0) {
+        setAiCountdown(remaining);
+        
+        // Clear recommendation when expired
+        if (remaining === 0) {
+          setAiRecommendation(null);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [aiRecommendation]);
 
   const generateAdvancedSignal = useCallback((symbol: string, currentPrice: number, data: MarketData): Signal | null => {
     const { previousPrices } = data;
@@ -559,6 +582,55 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
       {/* Content Section */}
       <div className="p-6">
+        {/* AI Recommendation Section */}
+        {aiRecommendation && (
+          <div className="mb-6 bg-gradient-to-r from-purple-600/20 via-blue-600/20 to-purple-600/20 rounded-xl border border-purple-500/30 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-purple-500 rounded-full animate-pulse opacity-20"></div>
+                  <Brain className="h-8 w-8 text-purple-400 relative z-10" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-white mb-1">AI Market Recommendation</h4>
+                  <p className="text-sm text-gray-300">{aiRecommendation.reasoning}</p>
+                </div>
+              </div>
+              
+              <div className="text-right">
+                <div className={`text-3xl font-bold mb-2 ${
+                  aiRecommendation.action === 'BUY' ? 'text-green-400' :
+                  aiRecommendation.action === 'SELL' ? 'text-red-400' : 'text-blue-400'
+                }`}>
+                  {aiRecommendation.action}
+                </div>
+                <div className="text-lg font-bold text-white mb-1">{aiRecommendation.confidence}%</div>
+                <div className="text-xl font-mono text-yellow-400 bg-gray-700/50 px-3 py-2 rounded-lg">
+                  {formatCountdown(aiCountdown)}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {signalDuration}min analysis
+                </div>
+              </div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="mt-4">
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-1000 ${
+                    aiRecommendation.action === 'BUY' ? 'bg-green-400' :
+                    aiRecommendation.action === 'SELL' ? 'bg-red-400' : 'bg-blue-400'
+                  }`}
+                  style={{ 
+                    width: `${100 - (aiCountdown / (signalDuration * 60)) * 100}%` 
+                  }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {signals.length === 0 ? (
           <div className="text-center py-16">
             <div className="relative mb-8">

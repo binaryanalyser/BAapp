@@ -82,7 +82,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     setConnectionStatus('connecting');
     console.log('Connecting to WebSocket...');
     
-    wsRef.current = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089&l=EN');
+    wsRef.current = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=88454&l=EN');
     
     wsRef.current.onopen = () => {
       console.log('WebSocket connected');

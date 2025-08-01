@@ -54,6 +54,7 @@ interface AISignal {
 const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const { ticks } = useWebSocket();
   const [isLoadingProposal, setIsLoadingProposal] = useState(false);
+  const [profitAnimation, setProfitAnimation] = useState(false);
   const { user } = useAuth();
   const { addTrade, updateTrade } = useTradingContext();
   const [isAnalyzing, setIsAnalyzing] = useState(false);

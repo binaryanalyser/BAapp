@@ -910,7 +910,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
             <label className="block text-sm font-medium text-gray-300 mb-4">
               Contract Type
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto">
               {contractTypes.map((type) => {
                 const Icon = type.icon;
                 const isSelected = selectedContract === type.value;
@@ -918,15 +918,26 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
                   <button
                     key={type.value}
                     onClick={() => setSelectedContract(type.value)}
-                    className={`p-4 rounded-lg text-base font-medium transition-all duration-300 border-2 transform hover:scale-105 ${
+                    className={`p-6 rounded-xl text-lg font-bold transition-all duration-300 border-3 transform hover:scale-105 relative overflow-hidden ${
                       isSelected
-                        ? type.activeColor
-                        : `${type.color} border-transparent`
+                        ? `${type.activeColor} ring-4 ring-opacity-50 ${
+                            type.value === 'CALL' ? 'ring-green-400' : 'ring-red-400'
+                          } shadow-2xl scale-105`
+                        : `${type.color} border-transparent hover:border-gray-500`
                     }`}
                   >
-                    <div className="flex items-center justify-center space-x-2">
-                      <Icon className="h-5 w-5" />
-                      <span>{type.label}</span>
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
+                    )}
+                    <div className="relative flex flex-col items-center justify-center space-y-2">
+                      <Icon className={`h-8 w-8 ${isSelected ? 'animate-bounce' : ''}`} />
+                      <span className="text-xl">{type.label}</span>
+                      {isSelected && (
+                        <div className="flex items-center space-x-1 text-sm opacity-90">
+                          <div className="w-2 h-2 bg-current rounded-full animate-pulse"></div>
+                          <span>Selected</span>
+                        </div>
+                      )}
                     </div>
                   </button>
                 );
@@ -1012,18 +1023,32 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
             <button
               onClick={handleTrade}
               disabled={isTrading || !user || !currentPrice}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-4 px-6 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+              className={`w-full disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 px-6 rounded-xl transition-all duration-300 flex items-center justify-center space-x-3 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl text-lg ${
+                selectedContract === 'CALL' 
+                  ? 'bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25' 
+                  : 'bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25'
+              }`}
             >
               {isTrading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span className="text-lg">Placing Trade...</span>
+                  <span>Placing Trade...</span>
                 </>
               ) : (
                 <>
-                  <Play className="h-5 w-5" />
-                  <span className="text-lg">Execute Trade</span>
-                  <Zap className="h-5 w-5 animate-pulse" />
+                  {selectedContract === 'CALL' ? (
+                    <>
+                      <TrendingUp className="h-6 w-6 animate-bounce" />
+                      <span>Trade Higher</span>
+                      <Zap className="h-5 w-5 animate-pulse" />
+                    </>
+                  ) : (
+                    <>
+                      <TrendingDown className="h-6 w-6 animate-bounce" />
+                      <span>Trade Lower</span>
+                      <Zap className="h-5 w-5 animate-pulse" />
+                    </>
+                  )}
                 </>
               )}
             </button>

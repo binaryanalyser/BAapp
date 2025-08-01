@@ -279,7 +279,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
           <label className="block text-sm font-medium text-gray-300 mb-3">
             Contract Type
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             {contractTypes.map((type) => {
               const Icon = type.icon;
               const isSelected = selectedContract === type.value;
@@ -287,15 +287,28 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
                 <button
                   key={type.value}
                   onClick={() => setSelectedContract(type.value)}
-                  className={`p-4 rounded-lg text-sm font-medium transition-all duration-300 border-2 transform hover:scale-105 ${
+                  className={`p-5 rounded-xl text-base font-bold transition-all duration-300 border-3 transform hover:scale-105 relative overflow-hidden ${
                     isSelected
-                      ? type.activeColor
-                      : `${type.color} border-transparent`
+                      ? `${type.activeColor} ring-4 ring-opacity-50 ${
+                          type.value === 'CALL' ? 'ring-green-400' : 
+                          type.value === 'PUT' ? 'ring-red-400' :
+                          type.value === 'DIGITMATCH' ? 'ring-blue-400' : 'ring-yellow-400'
+                        } shadow-2xl scale-105`
+                      : `${type.color} border-transparent hover:border-gray-500`
                   }`}
                 >
-                  <div className="flex items-center justify-center space-x-2">
-                    <Icon className="h-4 w-4" />
+                  {isSelected && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
+                  )}
+                  <div className="relative flex flex-col items-center justify-center space-y-2">
+                    <Icon className={`h-6 w-6 ${isSelected ? 'animate-bounce' : ''}`} />
                     <span>{type.label}</span>
+                    {isSelected && (
+                      <div className="flex items-center space-x-1 text-xs opacity-90">
+                        <div className="w-1.5 h-1.5 bg-current rounded-full animate-pulse"></div>
+                        <span>Selected</span>
+                      </div>
+                    )}
                   </div>
                 </button>
               );
@@ -407,7 +420,15 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
         <button
           onClick={handleTrade}
           disabled={isTrading || !user || !currentPrice || !proposalData || isLoadingProposal}
-          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-4 px-4 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+          className={`w-full disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 px-4 rounded-xl transition-all duration-300 flex items-center justify-center space-x-3 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl text-lg ${
+            selectedContract === 'CALL' 
+              ? 'bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25' 
+              : selectedContract === 'PUT'
+              ? 'bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25'
+              : selectedContract === 'DIGITMATCH'
+              ? 'bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 hover:from-blue-700 hover:via-blue-800 hover:to-blue-900 shadow-blue-500/25'
+              : 'bg-gradient-to-r from-yellow-600 via-yellow-700 to-yellow-800 hover:from-yellow-700 hover:via-yellow-800 hover:to-yellow-900 shadow-yellow-500/25'
+          }`}
         >
           {isTrading ? (
             <>
@@ -421,8 +442,27 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
             </>
           ) : (
             <>
-              <Play className="h-5 w-5" />
-              <span>Execute Trade</span>
+              {selectedContract === 'CALL' ? (
+                <>
+                  <TrendingUp className="h-6 w-6 animate-bounce" />
+                  <span>Trade Higher</span>
+                </>
+              ) : selectedContract === 'PUT' ? (
+                <>
+                  <TrendingDown className="h-6 w-6 animate-bounce" />
+                  <span>Trade Lower</span>
+                </>
+              ) : selectedContract === 'DIGITMATCH' ? (
+                <>
+                  <Target className="h-6 w-6 animate-bounce" />
+                  <span>Trade Matches</span>
+                </>
+              ) : (
+                <>
+                  <Target className="h-6 w-6 animate-bounce" />
+                  <span>Trade Differs</span>
+                </>
+              )}
               <Zap className="h-4 w-4 animate-pulse" />
             </>
           )}

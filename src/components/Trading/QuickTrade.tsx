@@ -416,7 +416,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
             <span>Please log in to place trades</span>
           </div>
         )}
-
+s
         {(!currentPrice || !proposalData) && user && !isLoadingProposal && (
           <div className="flex items-center justify-center space-x-2 text-sm text-yellow-400">
             <Activity className="h-4 w-4 animate-pulse" />

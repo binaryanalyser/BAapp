@@ -48,10 +48,12 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   const [signalDuration, setSignalDuration] = useState<number>(5); // Duration in minutes
   const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(Date.now() + 5 * 60 * 1000);
   const [analysisCountdown, setAnalysisCountdown] = useState<number>(0);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [aiCountdown, setAiCountdown] = useState<number>(0);
 
   // AI Recommendation state
   const [aiRecommendation, setAiRecommendation] = useState<{
-    action: 'BUY' | 'SELL' | null;
+    action: 'BUY' | 'SELL' | 'NEUTRAL' | null;
     confidence: number;
     reasoning: string;
     startTime: number;
@@ -127,7 +129,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   }, []);
 
   const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
+    action: 'BUY' | 'SELL' | 'NEUTRAL' | null;
     confidence: number;
     reasoning: string;
   } => {
@@ -138,275 +140,25 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     let totalBearishSignals = 0;
     let totalConfidence = 0;
     let reasoningParts: string[] = [];
+    let analyzedSymbols = 0;
 
     symbols.forEach(symbol => {
       const data = marketData[symbol];
       if (data.previousPrices.length < 20) return;
 
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
+      analyzedSymbols++;
+      let symbolScore = 0;
 
       const rsi = calculateRSI(data.previousPrices);
       const macd = calculateMACD(data.previousPrices);
       const priceAction = analyzePriceAction(data.previousPrices);
+      const bollinger = calculateBollingerBands(data.previousPrices);
 
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
+      // RSI Analysis
+      if (rsi < 30) {
         totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
-        setAiCountdown(remaining);
-        
-        // Clear recommendation when expired
-        if (remaining === 0) {
-          setAiRecommendation(null);
-        }
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [aiRecommendation]);
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
-
+        symbolScore += 2;
+        reasoningParts.push(`${symbol}: Oversold (RSI: ${rsi.toFixed(0)})`);
       } else if (rsi > 70) {
         totalBearishSignals += 2;
         symbolScore -= 2;
@@ -460,63 +212,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       action = 'SELL';
       confidence = Math.min(baseConfidence + (Math.abs(netSignal) * 5), 95);
       reasoning = `Bearish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
-      if (rsi < 30) {
-    } else {
-        symbolScore += 2;
-        reasoningParts.push(`${symbol}: Oversold (RSI: ${rsi.toFixed(0)})`);
-      } else if (rsi > 70) {
-      reasoning = `Mixed signals across markets. ${analyzedSymbols} assets analyzed with conflicting indicators`;
-        symbolScore -= 2;
-        reasoningParts.push(`${symbol}: Overbought (RSI: ${rsi.toFixed(0)})`);
-
-
-      // MACD Analysis
-      if (macd === 'bullish') {
-        totalBullishSignals += 1;
-        symbolScore += 1;
-      } else if (macd === 'bearish') {
-        totalBearishSignals += 1;
-        symbolScore -= 1;
-      }
-
-      // Price Action Analysis
-      if (priceAction.trend === 'uptrend' && priceAction.momentum > 0.1) {
-        totalBullishSignals += 1;
-        symbolScore += 1;
-      } else if (priceAction.trend === 'downtrend' && priceAction.momentum < -0.1) {
-        totalBearishSignals += 1;
-        symbolScore -= 1;
-      }
-
-      // Bollinger Bands Analysis
-      if (bollinger === 'squeeze') {
-        totalConfidence += 10; // Volatility breakout expected
-        reasoningParts.push(`${symbol}: Volatility squeeze detected`);
-      }
-
-      totalConfidence += Math.abs(symbolScore) * 5;
-    return { action, confidence: Math.round(confidence), reasoning };
-
-    if (analyzedSymbols === 0) {
-      return { action: 'NEUTRAL', confidence: 0, reasoning: 'Insufficient market data for analysis' };
-    }
-
-    // Determine overall recommendation
-    const netSignal = totalBullishSignals - totalBearishSignals;
-    const baseConfidence = Math.min(totalConfidence / analyzedSymbols, 95);
-    
-    let action: 'BUY' | 'SELL' | 'NEUTRAL';
-    let confidence: number;
-    let reasoning: string;
-
-    if (netSignal > 2) {
-      action = 'BUY';
-      confidence = Math.min(baseConfidence + (netSignal * 5), 95);
-      reasoning = `Bullish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
-    } else if (netSignal < -2) {
-      action = 'SELL';
-      confidence = Math.min(baseConfidence + (Math.abs(netSignal) * 5), 95);
-      reasoning = `Bearish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
     } else {
       action = 'NEUTRAL';
       confidence = Math.max(baseConfidence - 20, 30);
@@ -525,36 +220,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
     return { action, confidence: Math.round(confidence), reasoning };
   }, [calculateRSI, calculateMACD, analyzePriceAction, calculateBollingerBands]);
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
-        totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
-        totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
-      }
 
   const generateAdvancedSignal = useCallback((symbol: string, currentPrice: number, data: MarketData): Signal | null => {
     const { previousPrices } = data;
@@ -673,37 +338,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     });
   }, [ticks]);
 
-  // Generate signals based on market analysis
+  // Initialize analysis when market data is available
   useEffect(() => {
-    const generateSignals = () => {
-      const now = Date.now();
-      
-      // Only analyze if it's time for the next analysis
-      if (now < nextAnalysisTime) {
-        return;
-      }
-      
-      setAnalysisStatus('analyzing');
-      
-      setTimeout(() => {
-        // Prioritize selected asset for signal generation
-        const symbolsToAnalyze = selectedAsset 
-          ? [selectedAsset, ...Object.keys(marketData).filter(s => s !== selectedAsset)]
-          : Object.keys(marketData);
-
-        symbolsToAnalyze.forEach((symbol, index) => {
-          const data = marketData[symbol];
-          if (!data) return;
-
-          // Higher chance for selected asset, lower for others
-          const generationChance = symbol === selectedAsset ? 0.7 : 0.15;
-          
-          if (Math.random() > (1 - generationChance)) {
-            const signal = generateAdvancedSignal(symbol, data.price, data);
-            if (signal) {
-              setSignals(prev => {
-                const filtered = prev.filter(s => 
-                  (s.symbol !== symbol || Date.now() - s.timestamp > 30000) &&
     if (isInitializing && Object.keys(marketData).length > 0) {
       console.log('Initializing AI Analysis...');
       performAnalysis();
@@ -792,23 +428,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
     return () => clearInterval(interval);
   }, [aiCountdown]);
-    };
-
-    // Check every 5 seconds if it's time to analyze
-    const interval = setInterval(generateSignals, 5000);
-    return () => clearInterval(interval);
-  }, [marketData, generateAdvancedSignal, selectedAsset, signalDuration, nextAnalysisTime]);
-
-  // Update analysis countdown
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.ceil((nextAnalysisTime - now) / 1000));
-      setAnalysisCountdown(remaining);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [nextAnalysisTime]);
 
   // Update signal countdowns
   useEffect(() => {
@@ -969,39 +588,14 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
       {/* Content Section */}
       <div className="p-6">
-                <div className={`text-3xl font-bold mb-2 ${
-                  aiRecommendation.action === 'BUY' ? 'text-green-400' :
-                  aiRecommendation.action === 'SELL' ? 'text-red-400' : 'text-blue-400'
-                }`}>
-                  {aiRecommendation.action}
-                </div>
-                <div className="text-lg font-bold text-white mb-1">{aiRecommendation.confidence}%</div>
-                <div className="text-xl font-mono text-yellow-400 bg-gray-700/50 px-3 py-2 rounded-lg">
-                  {formatCountdown(aiCountdown)}
-                </div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {signalDuration}min analysis
-                </div>
-              </div>
-            </div>
-            
-            {/* Progress Bar */}
-            <div className="mt-4">
-              <div className="w-full bg-gray-700 rounded-full h-2">
-                <div 
-                  className={`h-2 rounded-full transition-all duration-1000 ${
-                    aiRecommendation.action === 'BUY' ? 'bg-green-400' :
-                    aiRecommendation.action === 'SELL' ? 'bg-red-400' : 'bg-blue-400'
-                  }`}
-                  style={{ 
-                    width: `${100 - (aiCountdown / (signalDuration * 60)) * 100}%` 
-                  }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        )}
-
+        {/* AI Recommendation Card */}
+        {aiRecommendation && (
+          <div className={`mb-6 rounded-xl border-2 p-6 ${
+            aiRecommendation.action === 'BUY' ? 'border-green-500 bg-green-500/10' :
+            aiRecommendation.action === 'SELL' ? 'border-red-500 bg-red-500/10' : 'border-blue-500 bg-blue-500/10'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
                 <div className="relative">
                   <div className={`absolute inset-0 rounded-full animate-pulse ${
                     aiRecommendation.action === 'BUY' ? 'bg-green-500/30' :
@@ -1160,7 +754,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
                       {signalDuration}min hold
-                      </div>
+                    </div>
                   </div>
                 </div>
                 

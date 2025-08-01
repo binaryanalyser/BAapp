@@ -8,7 +8,7 @@ import { User } from 'lucide-react';
 const Dashboard: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
   const { isConnected, subscribeTo } = useWebSocket();
-  const [selectedSymbols] = useState(['VIX10', 'VIX25', 'VIX50', 'VIX75', 'VIX100']);
+  const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
 
   // Move useEffect to top level, before any conditional returns
   useEffect(() => {

@@ -26,7 +26,7 @@ interface ChartDataPoint {
 }
 
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
-  const [selectedSymbol, setSelectedSymbol] = useState('VIX10');
+  const [selectedSymbol, setSelectedSymbol] = useState('R_10');
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const [currentTick, setCurrentTick] = useState<TickData | null>(null);
@@ -48,11 +48,11 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const [digitHistory, setDigitHistory] = useState<number[]>([]);
 
   const volatilityIndices = [
-    { symbol: 'VIX10', label: '10', name: 'Volatility 10', decimals: 3 },
-    { symbol: 'VIX25', label: '25', name: 'Volatility 25', decimals: 3 },
-    { symbol: 'VIX50', label: '50', name: 'Volatility 50', decimals: 4 },
-    { symbol: 'VIX75', label: '75', name: 'Volatility 75', decimals: 4 },
-    { symbol: 'VIX100', label: '100', name: 'Volatility 100', decimals: 2 }
+    { symbol: 'R_10', label: '10', name: 'Volatility 10', decimals: 3 },
+    { symbol: 'R_25', label: '25', name: 'Volatility 25', decimals: 3 },
+    { symbol: 'R_50', label: '50', name: 'Volatility 50', decimals: 4 },
+    { symbol: 'R_75', label: '75', name: 'Volatility 75', decimals: 4 },
+    { symbol: 'R_100', label: '100', name: 'Volatility 100', decimals: 2 }
   ];
 
   const categories = [

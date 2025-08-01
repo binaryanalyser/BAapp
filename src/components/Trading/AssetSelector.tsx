@@ -20,16 +20,16 @@ const AssetSelector: React.FC<AssetSelectorProps> = ({ selectedAsset, onAssetCha
   const { ticks } = useWebSocket();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [favoriteAssets, setFavoriteAssets] = useState<string[]>(['VIX10', 'VIX25', 'VIX50']);
+  const [favoriteAssets, setFavoriteAssets] = useState<string[]>(['R_10', 'R_25', 'R_50']);
 
   // Popular trading assets with categories
   const assets: Asset[] = [
     // Volatility Indices
-    { symbol: 'VIX10', display_name: 'Volatility 10 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
-    { symbol: 'VIX25', display_name: 'Volatility 25 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
-    { symbol: 'VIX50', display_name: 'Volatility 50 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
-    { symbol: 'VIX75', display_name: 'Volatility 75 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
-    { symbol: 'VIX100', display_name: 'Volatility 100 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
+    { symbol: 'R_10', display_name: 'Volatility 10 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
+    { symbol: 'R_25', display_name: 'Volatility 25 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
+    { symbol: 'R_50', display_name: 'Volatility 50 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
+    { symbol: 'R_75', display_name: 'Volatility 75 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
+    { symbol: 'R_100', display_name: 'Volatility 100 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
     
     // Step Indices
     { symbol: 'STEPINDEX', display_name: 'Step Index', market: 'synthetic_index', submarket: 'step_index', is_trading_suspended: false, pip: 0.01 },

@@ -12,7 +12,6 @@ const TradingView: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
   const { isConnected, subscribeTo } = useWebSocket();
   const { stats: tradingStats, trades } = useTradingContext();
-  const [selectedAsset, setSelectedAsset] = useState('R_10');
   const [selectedAsset, setSelectedAsset] = useState('VIX10');
   const [selectedSymbols] = useState(['VIX10', 'VIX25', 'VIX50', 'VIX75', 'VIX100']);
   const [activeTradeCountdowns, setActiveTradeCountdowns] = useState<Record<string, number>>({});

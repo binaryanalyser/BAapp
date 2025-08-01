@@ -313,12 +313,6 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
 
         {/* Trade Summary */}
         <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
-          {isLoadingProposal && (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400 mr-2"></div>
-              <span className="text-sm text-gray-400">Getting live prices...</span>
-            </div>
-          )}
           <div className="flex justify-between items-center mb-3">
             <span className="text-gray-400 text-sm">Asset:</span>
             <span className="text-white font-medium">{selectedAsset}</span>

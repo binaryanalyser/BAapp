@@ -1268,7 +1268,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-green-400">Bullish</span>
-              <span className="text-white">{marketSentiment.bullish.toFixed(1d\)}%</span>
+              <span className="text-white">{marketSentiment.bullish.toFixed(1)}%</span>
             </div>
             <div className="w-full bg-gray-700 rounded-full h-2">
               <div 

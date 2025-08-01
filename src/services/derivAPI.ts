@@ -290,8 +290,7 @@ class DerivAPI {
     return new Promise((resolve, reject) => {
       const request = {
         buy: 1,
-        parameters,
-        price: parameters.amount,
+        ...parameters,
         req_id: Date.now()
       };
 
@@ -312,6 +311,63 @@ class DerivAPI {
     });
   }
 
+  async getContractsFor(symbol: string): Promise<any> {
+    if (!this.isConnected) {
+      throw new Error('WebSocket is not connected');
+    }
+
+    return new Promise((resolve, reject) => {
+      const request = {
+        contracts_for: symbol,
+        currency: 'USD',
+        req_id: Date.now()
+      };
+
+      const handleMessage = (event: MessageEvent) => {
+        const data = JSON.parse(event.data);
+        if (data.req_id === request.req_id) {
+          this.ws?.removeEventListener('message', handleMessage);
+          if (data.error) {
+            reject(new Error(data.error.message));
+          } else {
+            resolve(data);
+          }
+        }
+      };
+
+      this.ws?.addEventListener('message', handleMessage);
+      this.ws?.send(JSON.stringify(request));
+    });
+  }
+
+  async getProposal(parameters: any): Promise<any> {
+    if (!this.isConnected) {
+      throw new Error('WebSocket is not connected');
+    }
+
+    return new Promise((resolve, reject) => {
+      const request = {
+        proposal: 1,
+        ...parameters,
+        req_id: Date.now()
+      };
+
+      const handleMessage = (event: MessageEvent) => {
+        const data = JSON.parse(event.data);
+        if (data.req_id === request.req_id) {
+          this.ws?.removeEventListener('message', handleMessage);
+          if (data.error) {
+            reject(new Error(data.error.message));
+          } else {
+            resolve(data);
+          }
+        }
+      };
+
+      this.ws?.addEventListener('message', handleMessage);
+      this.ws?.send(JSON.stringify(request));
+    });
+  }
   disconnect(): void {
     if (this.ws) {
       this.ws.close();

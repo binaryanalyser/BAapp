@@ -3,7 +3,7 @@ import { derivAPI } from '../services/derivAPI';
 
 interface TickData {
   symbol: string;
-  tick: number;
+  price: number;
   epoch: number;
   quote: number;
 }
@@ -42,14 +42,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }
 
     const handleTick = (data: any) => {
-      if (data.tick) {
+      if (data.price) {
         setTicks(prev => ({
           ...prev,
-          [data.tick.symbol]: {
-            symbol: data.tick.symbol,
-            tick: data.tick.tick,
-            epoch: data.tick.epoch,
-            quote: data.tick.quote
+          [data.symbol]: {
+            symbol: data.symbol,
+            price: data.price,
+            epoch: data.epoch,
+            quote: data.quote
           }
         }));
       }

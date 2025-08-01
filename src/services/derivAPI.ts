@@ -1,6 +1,6 @@
 // Deriv API WebSocket service
 export interface TickData {
-  tick: number;
+  price: number;
   epoch: number;
   symbol: string;
   quote: number;
@@ -68,6 +68,8 @@ class DerivAPI {
   private subscriptions = new Map<string, string>(); // symbol -> subscription_id
   private readonly APP_ID = '88454';
   private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${this.APP_ID}`;
+  private requestCallbacks = new Map<number, { resolve: Function; reject: Function; timeout: NodeJS.Timeout }>();
+  private requestId = 1;
 
   async connect(): Promise<void> {
     if (this.isConnected || this.isConnecting) {
@@ -88,7 +90,12 @@ class DerivAPI {
         };
 
         this.ws.onmessage = (event) => {
-          this.handleResponse(JSON.parse(event.data));
+          try {
+            const data = JSON.parse(event.data);
+            this.handleResponse(data);
+          } catch (error) {
+            console.error('Failed to parse WebSocket message:', error);
+          }
         };
 
         this.ws.onerror = (error) => {
@@ -116,6 +123,20 @@ class DerivAPI {
   }
 
   private handleResponse(data: any): void {
+    // Handle request callbacks first
+    if (data.req_id && this.requestCallbacks.has(data.req_id)) {
+      const callback = this.requestCallbacks.get(data.req_id)!;
+      clearTimeout(callback.timeout);
+      this.requestCallbacks.delete(data.req_id);
+      
+      if (data.error) {
+        callback.reject(new Error(data.error.message || 'API Error'));
+      } else {
+        callback.resolve(data);
+      }
+      return;
+    }
+
     if (data.error) {
       // Handle "already subscribed" as a warning, not an error
       if (data.error.message?.includes('already subscribed')) {
@@ -129,7 +150,7 @@ class DerivAPI {
     // Handle tick data
     if (data.tick) {
       const tickData: TickData = {
-        tick: data.tick.quote,
+        price: data.tick.quote,
         epoch: data.tick.epoch,
         symbol: data.tick.symbol,
         quote: data.tick.quote
@@ -146,61 +167,32 @@ class DerivAPI {
     }
   }
 
-  async authorize(token: string): Promise<AuthResponse> {
-    if (!this.isConnected) {
-      throw new Error('WebSocket is not connected');
-    }
-
+  private sendRequest(request: any, timeout: number = 30000): Promise<any> {
     return new Promise((resolve, reject) => {
-      const request = {
-        authorize: token,
-        req_id: Date.now()
-      };
+      if (!this.isConnected || !this.ws) {
+        reject(new Error('WebSocket is not connected'));
+        return;
+      }
 
-      const handleMessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        if (data.req_id === request.req_id) {
-          this.ws?.removeEventListener('message', handleMessage);
-          if (data.error) {
-            reject(new Error(data.error.message));
-          } else {
-            resolve(data);
-          }
-        }
-      };
+      const reqId = this.requestId++;
+      request.req_id = reqId;
 
-      this.ws?.addEventListener('message', handleMessage);
-      this.ws?.send(JSON.stringify(request));
+      const timeoutHandle = setTimeout(() => {
+        this.requestCallbacks.delete(reqId);
+        reject(new Error('Request timeout'));
+      }, timeout);
+
+      this.requestCallbacks.set(reqId, { resolve, reject, timeout: timeoutHandle });
+      this.ws.send(JSON.stringify(request));
     });
   }
 
+  async authorize(token: string): Promise<AuthResponse> {
+    return this.sendRequest({ authorize: token });
+  }
+
   async getBalance(): Promise<BalanceResponse> {
-    if (!this.isConnected) {
-      throw new Error('WebSocket is not connected');
-    }
-
-    return new Promise((resolve, reject) => {
-      const request = {
-        balance: 1,
-        subscribe: 1,
-        req_id: Date.now()
-      };
-
-      const handleMessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        if (data.req_id === request.req_id) {
-          this.ws?.removeEventListener('message', handleMessage);
-          if (data.error) {
-            reject(new Error(data.error.message));
-          } else {
-            resolve(data);
-          }
-        }
-      };
-
-      this.ws?.addEventListener('message', handleMessage);
-      this.ws?.send(JSON.stringify(request));
-    });
+    return this.sendRequest({ balance: 1, subscribe: 1 });
   }
 
   async subscribeTicks(symbol: string): Promise<void> {
@@ -214,37 +206,19 @@ class DerivAPI {
       return;
     }
 
-    return new Promise((resolve, reject) => {
-      const request = {
-        ticks: symbol,
-        subscribe: 1,
-        req_id: Date.now()
-      };
-
-      const handleMessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        if (data.req_id === request.req_id) {
-          this.ws?.removeEventListener('message', handleMessage);
-          if (data.error) {
-            // Handle "already subscribed" as success
-            if (data.error.message?.includes('already subscribed')) {
-              console.warn(`Already subscribed to ${symbol}, treating as success`);
-              resolve();
-            } else {
-              reject(new Error(`Failed to subscribe to ticks for ${symbol}: ${data.error.message}`));
-            }
-          } else {
-            if (data.subscription?.id) {
-              this.subscriptions.set(symbol, data.subscription.id);
-            }
-            resolve();
-          }
-        }
-      };
-
-      this.ws?.addEventListener('message', handleMessage);
-      this.ws?.send(JSON.stringify(request));
-    });
+    try {
+      const response = await this.sendRequest({ ticks: symbol, subscribe: 1 });
+      if (response.subscription?.id) {
+        this.subscriptions.set(symbol, response.subscription.id);
+      }
+    } catch (error: any) {
+      // Handle "already subscribed" as success
+      if (error.message?.includes('already subscribed')) {
+        console.warn(`Already subscribed to ${symbol}, treating as success`);
+        return;
+      }
+      throw error;
+    }
   }
 
   async unsubscribeTicks(symbol: string): Promise<void> {
@@ -254,121 +228,49 @@ class DerivAPI {
       return;
     }
 
-    if (!this.isConnected) {
-      throw new Error('WebSocket is not connected');
-    }
-
-    return new Promise((resolve, reject) => {
-      const request = {
-        forget: subscriptionId,
-        req_id: Date.now()
-      };
-
-      const handleMessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        if (data.req_id === request.req_id) {
-          this.ws?.removeEventListener('message', handleMessage);
-          if (data.error) {
-            reject(new Error(data.error.message));
-          } else {
-            this.subscriptions.delete(symbol);
-            resolve();
-          }
-        }
-      };
-
-      this.ws?.addEventListener('message', handleMessage);
-      this.ws?.send(JSON.stringify(request));
-    });
+    await this.sendRequest({ forget: subscriptionId });
+    this.subscriptions.delete(symbol);
   }
 
   async buyContract(parameters: any): Promise<ContractResponse> {
-    if (!this.isConnected) {
-      throw new Error('WebSocket is not connected');
-    }
-
-    return new Promise((resolve, reject) => {
-      const request = {
-        buy: 1,
-        ...parameters,
-        req_id: Date.now()
-      };
-
-      const handleMessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        if (data.req_id === request.req_id) {
-          this.ws?.removeEventListener('message', handleMessage);
-          if (data.error) {
-            reject(new Error(data.error.message));
-          } else {
-            resolve(data);
-          }
-        }
-      };
-
-      this.ws?.addEventListener('message', handleMessage);
-      this.ws?.send(JSON.stringify(request));
-    });
+    return this.sendRequest({ buy: 1, ...parameters });
   }
 
   async getContractsFor(symbol: string): Promise<any> {
-    if (!this.isConnected) {
-      throw new Error('WebSocket is not connected');
-    }
-
-    return new Promise((resolve, reject) => {
-      const request = {
-        contracts_for: symbol,
-        currency: 'USD',
-        req_id: Date.now()
-      };
-
-      const handleMessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        if (data.req_id === request.req_id) {
-          this.ws?.removeEventListener('message', handleMessage);
-          if (data.error) {
-            reject(new Error(data.error.message));
-          } else {
-            resolve(data);
-          }
-        }
-      };
-
-      this.ws?.addEventListener('message', handleMessage);
-      this.ws?.send(JSON.stringify(request));
+    return this.sendRequest({ 
+      contracts_for: symbol,
+      currency: 'USD'
     });
   }
 
   async getProposal(parameters: any): Promise<any> {
-    if (!this.isConnected) {
-      throw new Error('WebSocket is not connected');
-    }
+    return this.sendRequest({ proposal: 1, ...parameters });
+  }
 
-    return new Promise((resolve, reject) => {
-      const request = {
-        proposal: 1,
-        ...parameters,
-        req_id: Date.now()
-      };
+  async getPortfolio(): Promise<any> {
+    return this.sendRequest({ portfolio: 1 });
+  }
 
-      const handleMessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        if (data.req_id === request.req_id) {
-          this.ws?.removeEventListener('message', handleMessage);
-          if (data.error) {
-            reject(new Error(data.error.message));
-          } else {
-            resolve(data);
-          }
-        }
-      };
+  async sellContract(contractId: number): Promise<any> {
+    return this.sendRequest({ sell: contractId });
+  }
 
-      this.ws?.addEventListener('message', handleMessage);
-      this.ws?.send(JSON.stringify(request));
+  async getProposalOpenContract(contractId: number): Promise<any> {
+    return this.sendRequest({ 
+      proposal_open_contract: 1,
+      contract_id: contractId,
+      subscribe: 1
     });
   }
+
   disconnect(): void {
+    // Clear all pending callbacks
+    this.requestCallbacks.forEach(callback => {
+      clearTimeout(callback.timeout);
+      callback.reject(new Error('Connection closed'));
+    });
+    this.requestCallbacks.clear();
+
     if (this.ws) {
       this.ws.close();
       this.ws = null;

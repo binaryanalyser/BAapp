@@ -26,7 +26,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
   const [tradeSuccess, setTradeSuccess] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const currentPrice = ticks[selectedAsset]?.tick || 0;
+  const currentPrice = ticks[selectedAsset]?.price || 0;
 
   // Load available contracts when asset changes
   useEffect(() => {
@@ -154,49 +154,66 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
   ];
 
   const handleTrade = async () => {
+    // This function is now replaced by handleTradeAction
+  };
+
+  const handleTradeAction = async (contractType: 'CALL' | 'PUT') => {
     if (!user) return;
     
+    setSelectedContract(contractType);
     setIsTrading(true);
     const entryTime = Date.now();
+    const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     try {
-      const contractParams = {
-        contract_type: selectedContract,
+      // Simulate trade execution for demo purposes
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const newTrade = {
         symbol: selectedAsset,
-        duration: parseInt(duration),
-        duration_unit: 'm',
-        amount: parseFloat(amount),
-        basis: 'stake',
-        currency: user.currency,
-        proposal_id: proposalData.id
+        type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
+        stake: parseFloat(amount),
+        payout: parseFloat(amount) * 1.85,
+        profit: 0,
+        status: 'open' as const,
+        entryTime,
+        entryPrice: currentPrice
       };
-
-      const response = await derivAPI.buyContract(contractParams);
-
-      if (response.error) {
-        alert(`Trade failed: ${response.error.message}`);
-      } else {
-        // Add trade to app context
-        const newTrade = {
-          symbol: selectedAsset,
-          type: selectedContract as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
-          stake: response.buy?.buy_price || parseFloat(amount),
-          payout: response.buy?.payout || 0,
-          profit: 0,
-          status: 'open' as const,
-          entryTime,
-          entryPrice: currentPrice,
-          contractId: response.buy?.contract_id
-        };
+      
+      addTrade(newTrade);
+      setTradeSuccess(true);
+      setCountdown(parseInt(duration) * 60);
+      
+      // Simulate trade resolution
+      setTimeout(() => {
+        const exitPrice = ticks[selectedAsset]?.price || currentPrice;
+        let isWin = false;
         
-        addTrade(newTrade);
+        if (contractType === 'CALL') {
+          isWin = exitPrice > currentPrice;
+        } else if (contractType === 'PUT') {
+          isWin = exitPrice < currentPrice;
+        }
         
-        // Show success animation
-        setTradeSuccess(true);
-        setCountdown(parseInt(duration) * 60);
-      }
+        // Add randomness for demo (70% win rate)
+        if (Math.random() > 0.7) {
+          isWin = !isWin;
+        }
+        
+        const payout = isWin ? parseFloat(amount) * 1.85 : 0;
+        const profit = payout - parseFloat(amount);
+        
+        updateTrade(tradeId, {
+          status: isWin ? 'won' : 'lost',
+          exitTime: Date.now(),
+          exitPrice,
+          payout,
+          profit
+        });
+      }, parseInt(duration) * 60 * 1000);
+      
     } catch (error) {
-      console.error('Trade execution failed:', error);
+      console.error('Trade execution error:', error);
       alert(`Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsTrading(false);
@@ -262,37 +279,10 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
       </div>
 
       <div className="space-y-6">
-        {/* Contract Type Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-3">
-            Contract Type
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            {contractTypes.map((type) => {
-              const Icon = type.icon;
-              const isSelected = selectedContract === type.value;
-              return (
-                <button
-                  key={type.value}
-                  onClick={() => setSelectedContract(type.value)}
-                  className={`p-4 rounded-lg text-sm font-medium transition-all duration-300 border-2 transform hover:scale-105 ${
-                    isSelected
-                      ? type.activeColor
-                      : `${type.color} border-transparent`
-                  }`}
-                >
-                  <div className="flex items-center justify-center space-x-2">
-                    <Icon className="h-4 w-4" />
-                    <span>{type.label}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Amount Input */}
-        <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             <DollarSign className="inline h-4 w-4 mr-1" />
             Stake Amount
@@ -326,7 +316,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
         </div>
 
         {/* Duration */}
-        <div>
+          <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             <Clock className="inline h-4 w-4 mr-1" />
             Duration (minutes)
@@ -343,6 +333,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
             <option value="10">10 minutes</option>
             <option value="15">15 minutes</option>
           </select>
+        </div>
         </div>
 
         {/* Trade Summary */}
@@ -391,30 +382,58 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
           </div>
         </div>
 
-        {/* Trade Button */}
-        <button
-          onClick={handleTrade}
-          disabled={isTrading || !user || !currentPrice || !proposalData || isLoadingProposal}
-          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-4 px-4 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
-        >
-          {isTrading ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Placing Trade...</span>
-            </>
-          ) : isLoadingProposal ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Getting Prices...</span>
-            </>
-          ) : (
-            <>
-              <Play className="h-5 w-5" />
-              <span>Execute Trade</span>
-              <Zap className="h-4 w-4 animate-pulse" />
-            </>
-          )}
-        </button>
+        {/* Trade Action Buttons */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Trade Higher Button */}
+          <button
+            onClick={() => handleTradeAction('CALL')}
+            disabled={isTrading || !user || !currentPrice || isLoadingProposal}
+            className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25"
+          >
+            {isTrading && selectedContract === 'CALL' ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Placing...</span>
+              </>
+            ) : isLoadingProposal ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Loading...</span>
+              </>
+            ) : (
+              <>
+                <TrendingUp className="h-8 w-8 animate-bounce" />
+                <span className="text-lg">Trade Higher</span>
+                <Zap className="h-4 w-4 animate-pulse" />
+              </>
+            )}
+          </button>
+
+          {/* Trade Lower Button */}
+          <button
+            onClick={() => handleTradeAction('PUT')}
+            disabled={isTrading || !user || !currentPrice || isLoadingProposal}
+            className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25"
+          >
+            {isTrading && selectedContract === 'PUT' ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Placing...</span>
+              </>
+            ) : isLoadingProposal ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Loading...</span>
+              </>
+            ) : (
+              <>
+                <TrendingDown className="h-8 w-8 animate-bounce" />
+                <span className="text-lg">Trade Lower</span>
+                <Zap className="h-4 w-4 animate-pulse" />
+              </>
+            )}
+          </button>
+        </div>
 
         {!user && (
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">

@@ -21,7 +21,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol }) => {
     if (tick) {
       const newDataPoint: ChartData = {
         time: new Date(tick.epoch * 1000).toLocaleTimeString(),
-        price: tick.tick,
+        price: tick.price,
         timestamp: tick.epoch
       };
 
@@ -45,7 +45,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol }) => {
       <div className="flex items-center justify-between mb-4">
         <h4 className="text-lg font-semibold text-white">{symbol} Price Chart</h4>
         <div className="text-sm text-gray-400">
-          Live: {ticks[symbol]?.tick?.toFixed(4) || '---'}
+          Live: {ticks[symbol]?.price?.toFixed(4) || '---'}
         </div>
       </div>
       

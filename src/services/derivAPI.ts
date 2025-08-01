@@ -13,9 +13,6 @@ class DerivAPI {
   private callbacks: Map<number, (data: any) => void> = new Map();
   private tickCallback: ((data: any) => void) | null = null;
   private connectionCallback: ((connected: boolean) => void) | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000;
 
   connect() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -31,9 +28,7 @@ class DerivAPI {
       
       this.ws.onopen = () => {
         this.connectionPromise = null;
-        this.reconnectAttempts = 0;
         this.connectionCallback?.(true);
-        console.log('WebSocket connected successfully');
         resolve();
       };
 
@@ -54,28 +49,11 @@ class DerivAPI {
       this.ws.onclose = () => {
         this.connectionPromise = null;
         this.connectionCallback?.(false);
-        console.log('WebSocket closed:', event.code, event.reason);
-        
-        // Auto-reconnect with exponential backoff
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-          const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
-          console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
-          
-          setTimeout(() => {
-            this.reconnectAttempts++;
-            this.connect().catch(error => {
-              console.warn('Reconnection attempt failed:', error);
-            });
-          }, delay);
-        } else {
-          console.warn('Max reconnection attempts reached');
-        }
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
         this.connectionPromise = null;
-        // Don't reject immediately, let the close handler manage reconnection
+        reject(new Error('WebSocket connection failed'));
       };
     });
 
@@ -83,13 +61,7 @@ class DerivAPI {
   }
 
   private async sendRequest(request: any): Promise<DerivResponse> {
-    try {
-      await this.connect();
-    } catch (error) {
-      console.warn('Failed to connect for request, retrying...', error);
-      // Try once more
-      await this.connect();
-    }
+    await this.connect();
     
     return new Promise((resolve, reject) => {
       const reqId = this.messageId++;
@@ -102,14 +74,9 @@ class DerivAPI {
           this.callbacks.delete(reqId);
           reject(new Error('Request timeout'));
         }
-      }, 15000); // Increase timeout to 15 seconds
+      }, 10000);
 
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify(request));
-      } else {
-        this.callbacks.delete(reqId);
-        reject(new Error('WebSocket not connected'));
-      }
+      this.ws?.send(JSON.stringify(request));
     });
   }
 

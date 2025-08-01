@@ -93,30 +93,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setUser(sessionData);
             console.log('Session restored from localStorage');
             
-            // Verify token in background and update if needed (but don't logout on failure)
-            setTimeout(() => {
-              derivAPI.authorize(token).then(response => {
-                if (!response.error) {
-                  // Update balance if token is valid
-                  derivAPI.getBalance().then(balanceResponse => {
-                    if (balanceResponse.balance) {
-                      setUser(prev => prev ? {
-                        ...prev,
-                        balance: balanceResponse.balance.balance
-                      } : null);
-                    }
-                  }).catch(error => {
-                    console.warn('Balance update failed:', error);
-                  });
-                } else {
-                  console.warn('Token verification failed in background:', response.error.message);
-                  // Don't logout automatically - let user continue with cached session
-                }
-              }).catch(error => {
-                console.warn('Background token verification failed:', error);
-                // Don't logout on network errors
-              });
-            }, 2000); // Delay background verification
+            // Verify token in background and update if needed
+            derivAPI.authorize(token).then(response => {
+              if (response.error) {
+                console.warn('Token verification failed, but keeping session');
+                // Don't logout immediately, let user continue
+              } else {
+                // Update balance if token is valid
+                derivAPI.getBalance().then(balanceResponse => {
+                  if (balanceResponse.balance) {
+                    setUser(prev => prev ? {
+                      ...prev,
+                      balance: balanceResponse.balance.balance
+                    } : null);
+                  }
+                });
+              }
+            }).catch(error => {
+              console.warn('Background token verification failed:', error);
+            });
             
           } catch (parseError) {
             console.error('Failed to parse saved session, clearing:', parseError);
@@ -129,21 +124,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           try {
             const response = await derivAPI.authorize(token);
             if (response.error) {
-              console.warn('Auto-login failed:', response.error.message);
-              localStorage.removeItem('deriv_token');
-            } else {
-              const balance = await derivAPI.getBalance();
-              const userData = {
-                loginid: response.authorize.loginid,
-                email: response.authorize.email,
-                currency: response.authorize.currency,
-                balance: balance.balance?.balance || 0,
-                country: response.authorize.country
-              };
-              
-              setUser(userData);
-              console.log('Auto-login successful');
+              throw new Error(response.error.message);
             }
+            
+            const balance = await derivAPI.getBalance();
+            const userData = {
+              loginid: response.authorize.loginid,
+              email: response.authorize.email,
+              currency: response.authorize.currency,
+              balance: balance.balance?.balance || 0,
+              country: response.authorize.country
+            };
+            
+            setUser(userData);
+            console.log('Auto-login successful');
           } catch (loginError) {
             console.warn('Auto-login failed:', loginError);
             localStorage.removeItem('deriv_token');
@@ -169,14 +163,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [user]);
 
-  // Handle page visibility change to reconnect WebSocket only
+  // Handle page visibility change to maintain connection
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && user && !isRestoring) {
-        // Only reconnect WebSocket, don't re-authenticate
-        derivAPI.connect().catch(error => {
-          console.warn('Failed to reconnect WebSocket on visibility change:', error);
-        });
+        // Page became visible and user is logged in
+        // Reconnect WebSocket if needed
+        const token = localStorage.getItem('deriv_token');
+        if (token) {
+          derivAPI.connect().catch(error => {
+            console.warn('Failed to reconnect on visibility change:', error);
+          });
+        }
       }
     };
 
@@ -184,43 +182,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [user, isRestoring]);
 
-  // Add session timeout handling (optional - only logout after extended inactivity)
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    const resetTimeout = () => {
-      clearTimeout(timeoutId);
-      // Set a very long timeout (4 hours) before considering logout
-      timeoutId = setTimeout(() => {
-        console.log('Session timeout - user inactive for 4 hours');
-        // Only logout if there's been no activity for a very long time
-        logout();
-      }, 4 * 60 * 60 * 1000); // 4 hours
-    };
-
-    const handleActivity = () => {
-      if (user) {
-        resetTimeout();
-      }
-    };
-
-    if (user) {
-      resetTimeout();
-      // Listen for user activity
-      window.addEventListener('mousedown', handleActivity);
-      window.addEventListener('keydown', handleActivity);
-      window.addEventListener('scroll', handleActivity);
-      window.addEventListener('touchstart', handleActivity);
-    }
-
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener('mousedown', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
-      window.removeEventListener('scroll', handleActivity);
-      window.removeEventListener('touchstart', handleActivity);
-    };
-  }, [user]);
   const value = {
     user,
     isAuthenticated: !!user,

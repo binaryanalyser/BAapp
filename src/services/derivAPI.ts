@@ -24,7 +24,7 @@ class DerivAPI {
     }
 
     this.connectionPromise = new Promise<void>((resolve, reject) => {
-      this.ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=3738');
+      this.ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=88454');
       
       this.ws.onopen = () => {
         this.connectionPromise = null;

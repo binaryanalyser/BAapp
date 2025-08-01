@@ -14,6 +14,7 @@ const TradingView: React.FC = () => {
   const [selectedAsset, setSelectedAsset] = useState('R_10');
   const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
   const [activeTradeCountdowns, setActiveTradeCountdowns] = useState<Record<string, number>>({});
+  const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -60,6 +61,11 @@ const TradingView: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [trades]);
+
+  // Filter trades based on active tab
+  const openTrades = trades.filter(trade => trade.status === 'open');
+  const closedTrades = trades.filter(trade => trade.status !== 'open');
+  const displayTrades = activeTab === 'open' ? openTrades : closedTrades;
 
   const metrics = [
     {
@@ -183,22 +189,49 @@ const TradingView: React.FC = () => {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-3">
                   <History className="h-6 w-6 text-blue-400" />
-                  <h3 className="text-xl font-semibold text-white">Trade History</h3>
+                  <h3 className="text-xl font-semibold text-white">Trades</h3>
                 </div>
                 <div className="text-sm text-gray-400">
                   {trades.length} total
                 </div>
               </div>
 
+              {/* Tabs */}
+              <div className="flex space-x-1 mb-6 bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setActiveTab('open')}
+                  className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    activeTab === 'open'
+                      ? 'bg-gray-900 text-white border border-gray-500'
+                      : 'text-gray-300 hover:text-white hover:bg-gray-600'
+                  }`}
+                >
+                  Open Trades ({openTrades.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('closed')}
+                  className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    activeTab === 'closed'
+                      ? 'bg-gray-900 text-white border border-gray-500'
+                      : 'text-gray-300 hover:text-white hover:bg-gray-600'
+                  }`}
+                >
+                  Closed Trades ({closedTrades.length})
+                </button>
+              </div>
               <div className="space-y-4 max-h-[800px] overflow-y-auto">
-                {trades.length === 0 ? (
+                {displayTrades.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
                     <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No trades yet</p>
-                    <p className="text-sm mt-1">Start trading to see your history</p>
+                    <p>No {activeTab} trades</p>
+                    <p className="text-sm mt-1">
+                      {activeTab === 'open' 
+                        ? 'Start trading to see active positions' 
+                        : 'Completed trades will appear here'}
+                    </p>
                   </div>
                 ) : (
-                  trades.map((trade) => {
+                  displayTrades.map((trade) => {
                     const countdown = activeTradeCountdowns[trade.id];
                     const isActive = trade.status === 'open';
                     

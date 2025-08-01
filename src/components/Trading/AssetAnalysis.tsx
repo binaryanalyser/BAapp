@@ -1289,6 +1289,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
           </div>
         </div>
       )}
+    </div>
   );
 };
 

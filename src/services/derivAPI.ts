@@ -117,10 +117,12 @@ class DerivAPI {
 
   private handleResponse(data: any): void {
     if (data.error) {
-      console.error('API Error:', data.error);
+      // Handle "already subscribed" as a warning, not an error
       if (data.error.message?.includes('already subscribed')) {
-        throw new Error(data.error.message);
+        console.warn('Subscription already exists:', data.error.message);
+        return;
       }
+      console.error('API Error:', data.error);
       return;
     }
 
@@ -224,7 +226,13 @@ class DerivAPI {
         if (data.req_id === request.req_id) {
           this.ws?.removeEventListener('message', handleMessage);
           if (data.error) {
-            reject(new Error(`Failed to subscribe to ticks for ${symbol}: ${data.error.message}`));
+            // Handle "already subscribed" as success
+            if (data.error.message?.includes('already subscribed')) {
+              console.warn(`Already subscribed to ${symbol}, treating as success`);
+              resolve();
+            } else {
+              reject(new Error(`Failed to subscribe to ticks for ${symbol}: ${data.error.message}`));
+            }
           } else {
             if (data.subscription?.id) {
               this.subscriptions.set(symbol, data.subscription.id);

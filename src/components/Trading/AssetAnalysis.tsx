@@ -465,6 +465,28 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
              'Click to start manual analysis'}
           </p>
           
+          {/* Progress Bar for Market Data Collection */}
+          {priceHistory.length < 20 && (
+            <div className="mt-4">
+              <div className="flex justify-between text-sm text-gray-400 mb-2">
+                <span>Collecting Market Data</span>
+                <span>{priceHistory.length}/20</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-3">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${(priceHistory.length / 20) * 100}%` }}
+                ></div>
+              </div>
+              <div className="text-xs text-gray-500 mt-1 text-center">
+                {priceHistory.length === 0 ? 'Waiting for price data...' :
+                 priceHistory.length < 5 ? 'Initial data collection...' :
+                 priceHistory.length < 15 ? 'Building price history...' :
+                 'Almost ready for analysis...'}
+              </div>
+            </div>
+          )}
+          
           {!isAnalyzing && priceHistory.length >= 20 && nextAnalysisIn === 0 && (
             <button
               onClick={performAnalysis}

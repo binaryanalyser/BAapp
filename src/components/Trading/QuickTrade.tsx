@@ -163,7 +163,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
     setSelectedContract(contractType);
     setIsTrading(true);
     const entryTime = Date.now();
-    const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const tradeDuration = parseInt(duration) * 60; // Convert minutes to seconds
     
     try {
       // Simulate trade execution for demo purposes
@@ -173,6 +173,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
         symbol: selectedAsset,
         type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
         stake: parseFloat(amount),
+        duration: tradeDuration,
         payout: parseFloat(amount) * 1.85,
         profit: 0,
         status: 'open' as const,
@@ -183,34 +184,8 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
       addTrade(newTrade);
       setTradeSuccess(true);
       setCountdown(parseInt(duration) * 60);
-      
-      // Simulate trade resolution
-      setTimeout(() => {
-        const exitPrice = ticks[selectedAsset]?.price || currentPrice;
-        let isWin = false;
-        
-        if (contractType === 'CALL') {
-          isWin = exitPrice > currentPrice;
-        } else if (contractType === 'PUT') {
-          isWin = exitPrice < currentPrice;
-        }
-        
-        // Add randomness for demo (70% win rate)
-        if (Math.random() > 0.7) {
-          isWin = !isWin;
-        }
-        
-        const payout = isWin ? parseFloat(amount) * 1.85 : 0;
-        const profit = payout - parseFloat(amount);
-        
-        updateTrade(tradeId, {
-          status: isWin ? 'won' : 'lost',
-          exitTime: Date.now(),
-          exitPrice,
-          payout,
-          profit
-        });
-      }, parseInt(duration) * 60 * 1000);
+
+      // Trade will automatically expire and be resolved by TradingContext
       
     } catch (error) {
       console.error('Trade execution error:', error);

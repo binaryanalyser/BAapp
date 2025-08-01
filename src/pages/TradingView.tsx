@@ -54,6 +54,11 @@ const TradingView: React.FC = () => {
         const duration = trade.duration || 300; // Default 5 minutes
         const remaining = Math.max(0, duration - elapsed);
         newCountdowns[trade.id] = remaining;
+        
+        // Show expiry warning when 10 seconds left
+        if (remaining === 10 && remaining > 0) {
+          console.log(`Trade ${trade.symbol} ${trade.type} expiring in 10 seconds!`);
+        }
       });
       
       setActiveTradeCountdowns(newCountdowns);

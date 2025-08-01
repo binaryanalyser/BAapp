@@ -194,6 +194,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
         symbol: selectedAsset,
         type: contractType as 'CALLE' | 'PUTE' | 'DIGITMATCH' | 'DIGITDIFF',
         stake: parseFloat(amount),
+        duration: parseInt(duration) * 60, // Convert minutes to seconds
         payout: buyResponse.buy.payout || (parseFloat(amount) * 1.85),
         profit: 0,
         status: 'open' as const,

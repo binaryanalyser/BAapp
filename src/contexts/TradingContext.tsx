@@ -6,6 +6,7 @@ interface Trade {
   symbol: string;
   type: 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF';
   stake: number;
+  duration?: number; // Duration in seconds
   payout: number;
   profit: number;
   status: 'won' | 'lost' | 'open';

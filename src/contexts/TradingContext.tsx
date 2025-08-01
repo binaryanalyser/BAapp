@@ -4,7 +4,7 @@ import { derivAPI } from '../services/derivAPI';
 interface Trade {
   id: string;
   symbol: string;
-  type: 'CALLE' | 'PUTE' | 'DIGITMATCH' | 'DIGITDIFF';
+  type: 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF';
   stake: number;
   payout: number;
   profit: number;

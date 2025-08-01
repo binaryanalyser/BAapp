@@ -147,63 +147,129 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
     const entryTime = Date.now();
     
     try {
-      // Simulate trade execution for demo purposes
-      // In a real application, this would call the actual Deriv API
-      const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log('Executing real trade:', {
+        contractType,
+        symbol: selectedAsset,
+        amount: parseFloat(amount),
+        duration: parseInt(duration),
+        currentPrice
+      });
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get proposal first to get the contract details
+      const proposalParams = {
+        contract_type: contractType,
+        symbol: selectedAsset,
+        duration: parseInt(duration),
+        duration_unit: 'm',
+        amount: parseFloat(amount),
+        basis: 'stake',
+        currency: user.currency
+      };
+      
+      console.log('Getting proposal with params:', proposalParams);
+      const proposalResponse = await derivAPI.getProposal(proposalParams);
+      
+      if (!proposalResponse.proposal) {
+        throw new Error('Failed to get proposal');
+      }
+      
+      console.log('Proposal received:', proposalResponse.proposal);
+      
+      // Buy the contract using the proposal ID
+      const buyParams = {
+        buy: proposalResponse.proposal.id,
+        price: proposalResponse.proposal.ask_price
+      };
+      
+      console.log('Buying contract with params:', buyParams);
+      const buyResponse = await derivAPI.buyContract(buyParams);
+      
+      if (!buyResponse.buy) {
+        throw new Error('Failed to buy contract');
+      }
+      
+      console.log('Contract purchased successfully:', buyResponse.buy);
       
       const newTrade = {
         symbol: selectedAsset,
-        type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
+        type: contractType as 'CALLE' | 'PUTE' | 'DIGITMATCH' | 'DIGITDIFF',
         stake: parseFloat(amount),
-        payout: parseFloat(amount) * 1.85,
+        payout: buyResponse.buy.payout || (parseFloat(amount) * 1.85),
         profit: 0,
         status: 'open' as const,
         entryTime,
         entryPrice: currentPrice,
-        barrier: undefined
+        contractId: buyResponse.buy.contract_id.toString()
       };
       
       addTrade(newTrade);
       setTradeSuccess(true);
       setCountdown(parseInt(duration) * 60);
       
-      // Simulate trade resolution after duration
+      // Subscribe to contract updates to track the trade
+      try {
+        const contractUpdates = await derivAPI.getProposalOpenContract(buyResponse.buy.contract_id);
+        console.log('Subscribed to contract updates:', contractUpdates);
+      } catch (error) {
+        console.warn('Failed to subscribe to contract updates:', error);
+      }
+      
+      // Set up trade resolution monitoring
       setTimeout(() => {
-        const exitPrice = ticks[selectedAsset]?.price || currentPrice;
-        let isWin = false;
-        
-        // Simulate realistic win/loss logic based on contract type
-        if (contractType === 'CALL') {
-          isWin = exitPrice > currentPrice;
-        } else if (contractType === 'PUT') {
-          isWin = exitPrice < currentPrice;
-        }
-        
-        // Add some randomness to make it more realistic (70% accuracy for demo)
-        if (Math.random() > 0.7) {
-          isWin = !isWin;
-        }
-        
-        const payout = isWin ? parseFloat(amount) * 1.85 : 0;
-        const profit = payout - parseFloat(amount);
-        
-        updateTrade(tradeId, {
-          status: isWin ? 'won' : 'lost',
-          exitTime: Date.now(),
-          exitPrice,
-          payout,
-          profit
-        });
+        // In a real implementation, this would be handled by WebSocket updates
+        // For now, we'll check the portfolio to see if the trade is resolved
+        checkTradeStatus(buyResponse.buy.contract_id, newTrade.symbol);
       }, parseInt(duration) * 60 * 1000);
       
     } catch (error) {
       console.error('Trade execution error:', error);
-      alert(`Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Show user-friendly error messages
+      if (errorMessage.includes('InsufficientBalance')) {
+        errorMessage = 'Insufficient balance to place this trade';
+      } else if (errorMessage.includes('InvalidSymbol')) {
+        errorMessage = 'Invalid trading symbol';
+      } else if (errorMessage.includes('MarketIsClosed')) {
+        errorMessage = 'Market is currently closed';
+      } else if (errorMessage.includes('InvalidContract')) {
+        errorMessage = 'Invalid contract parameters';
+      }
+      
+      alert(`Failed to execute trade: ${errorMessage}`);
     } finally {
       setIsTrading(false);
+    }
+  };
+
+  const checkTradeStatus = async (contractId: number, symbol: string) => {
+    try {
+      const portfolio = await derivAPI.getPortfolio();
+      const contract = portfolio.portfolio?.contracts?.find((c: any) => c.contract_id === contractId);
+      
+      if (contract) {
+        const isWin = contract.profit > 0;
+        const profit = contract.profit || 0;
+        const payout = contract.payout || 0;
+        
+        // Find and update the trade
+        const tradeToUpdate = trades.find(t => t.contractId === contractId.toString());
+        if (tradeToUpdate) {
+          updateTrade(tradeToUpdate.id, {
+            status: isWin ? 'won' : 'lost',
+            exitTime: Date.now(),
+            exitPrice: contract.exit_tick || currentPrice,
+            payout,
+            profit
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check trade status:', error);
     }
   };
 

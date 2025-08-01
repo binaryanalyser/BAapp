@@ -53,9 +53,9 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
   // Update price history when new ticks arrive
   useEffect(() => {
     const tick = ticks[selectedSymbol];
-    if (tick && typeof tick.tick === 'number') {
+    if (tick && typeof tick.price === 'number') {
       setPriceHistory(prev => {
-        const newHistory = [...prev, tick.tick].slice(-100); // Keep last 100 prices
+        const newHistory = [...prev, tick.price].slice(-100); // Keep last 100 prices
         return newHistory;
       });
     }
@@ -315,7 +315,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     }
   };
 
-  const currentPrice = ticks[selectedSymbol]?.tick || 0;
+  const currentPrice = ticks[selectedSymbol]?.price || 0;
 
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">

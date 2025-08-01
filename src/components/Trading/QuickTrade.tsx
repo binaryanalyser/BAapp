@@ -166,30 +166,70 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
     const tradeDuration = parseInt(duration) * 60; // Convert minutes to seconds
     
     try {
-      // Simulate trade execution for demo purposes
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Execute real trade through Deriv API
+      const contractParams = {
+        contract_type: contractType,
+        symbol: selectedAsset,
+        duration: parseInt(duration),
+        duration_unit: 'm',
+        amount: parseFloat(amount),
+        basis: 'stake',
+        currency: user.currency || 'USD'
+      };
+
+      console.log('Executing trade with params:', contractParams);
+      const response = await derivAPI.buyContract(contractParams);
+      
+      if (response.error) {
+        throw new Error(response.error.message || 'Trade execution failed');
+      }
+
+      if (!response.buy) {
+        throw new Error('Invalid response from Deriv API');
+      }
+
+      console.log('Trade executed successfully:', response.buy);
       
       const newTrade = {
         symbol: selectedAsset,
         type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
         stake: parseFloat(amount),
         duration: tradeDuration,
-        payout: parseFloat(amount) * 1.85,
+        payout: response.buy.payout || parseFloat(amount) * 1.85,
         profit: 0,
         status: 'open' as const,
         entryTime,
-        entryPrice: currentPrice
+        entryPrice: currentPrice,
+        contractId: response.buy.contract_id?.toString(),
+        transactionId: response.buy.transaction_id?.toString(),
+        purchaseTime: response.buy.purchase_time,
+        longcode: response.buy.longcode,
+        shortcode: response.buy.shortcode
       };
       
       addTrade(newTrade);
       setTradeSuccess(true);
       setCountdown(parseInt(duration) * 60);
-
-      // Trade will automatically expire and be resolved by TradingContext
+      
+      // Show success message
+      console.log(`Trade placed successfully: ${contractType} ${selectedAsset} for ${amount} ${user.currency}`);
       
     } catch (error) {
       console.error('Trade execution error:', error);
-      alert(`Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      // Show user-friendly error messages
+      if (errorMessage.includes('InsufficientBalance')) {
+        alert('Insufficient balance. Please check your account balance.');
+      } else if (errorMessage.includes('InvalidSymbol')) {
+        alert('Invalid trading symbol. Please try a different asset.');
+      } else if (errorMessage.includes('TradingDisabled')) {
+        alert('Trading is currently disabled for this asset.');
+      } else if (errorMessage.includes('InvalidToken')) {
+        alert('Your session has expired. Please log in again.');
+      } else {
+        alert(`Failed to execute trade: ${errorMessage}`);
+      }
     } finally {
       setIsTrading(false);
     }

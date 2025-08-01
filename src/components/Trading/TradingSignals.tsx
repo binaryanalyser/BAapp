@@ -138,33 +138,86 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     let totalBearishSignals = 0;
     let totalConfidence = 0;
     let reasoningParts: string[] = [];
+    let analyzedSymbols = 0;
 
     symbols.forEach(symbol => {
       const data = marketData[symbol];
       if (data.previousPrices.length < 20) return;
 
+      analyzedSymbols++;
+      let symbolScore = 0;
+
       const rsi = calculateRSI(data.previousPrices);
       const macd = calculateMACD(data.previousPrices);
       const priceAction = analyzePriceAction(data.previousPrices);
+      const bollinger = calculateBollingerBands(data.previousPrices);
 
-      // Analyze each symbol
-      if (rsi < 30 && macd === 'bullish') {
+      // RSI Analysis
+      if (rsi < 30) {
         totalBullishSignals += 2;
-        reasoningParts.push(`${symbol}: Oversold + Bullish MACD`);
-      } else if (rsi > 70 && macd === 'bearish') {
+        symbolScore += 2;
+        reasoningParts.push(`${symbol}: Oversold (RSI: ${rsi.toFixed(0)})`);
+      } else if (rsi > 70) {
         totalBearishSignals += 2;
-        reasoningParts.push(`${symbol}: Overbought + Bearish MACD`);
+        symbolScore -= 2;
+        reasoningParts.push(`${symbol}: Overbought (RSI: ${rsi.toFixed(0)})`);
       }
+
+      // MACD Analysis
+      if (macd === 'bullish') {
+        totalBullishSignals += 1;
+        symbolScore += 1;
+      } else if (macd === 'bearish') {
+        totalBearishSignals += 1;
+        symbolScore -= 1;
+      }
+
+      // Price Action Analysis
+      if (priceAction.trend === 'uptrend' && priceAction.momentum > 0.1) {
+        totalBullishSignals += 1;
+        symbolScore += 1;
+      } else if (priceAction.trend === 'downtrend' && priceAction.momentum < -0.1) {
+        totalBearishSignals += 1;
+        symbolScore -= 1;
+      }
+
+      // Bollinger Bands Analysis
+      if (bollinger === 'squeeze') {
+        totalConfidence += 10; // Volatility breakout expected
+        reasoningParts.push(`${symbol}: Volatility squeeze detected`);
+      }
+
+      totalConfidence += Math.abs(symbolScore) * 5;
     });
+
+    if (analyzedSymbols === 0) {
+      return { action: null, confidence: 0, reasoning: 'Insufficient market data for analysis' };
+    }
 
     // Determine overall recommendation
     const netSignal = totalBullishSignals - totalBearishSignals;
-    const action = netSignal > 1 ? 'BUY' : netSignal < -1 ? 'SELL' : null;
-    const confidence = Math.min(Math.abs(netSignal) * 15 + 50, 95);
-    const reasoning = reasoningParts.length > 0 ? reasoningParts.join(', ') : 'Mixed signals across markets';
+    const baseConfidence = Math.min(totalConfidence / analyzedSymbols, 95);
+    
+    let action: 'BUY' | 'SELL' | null;
+    let confidence: number;
+    let reasoning: string;
 
-    return { action, confidence, reasoning };
-  }, [calculateRSI, calculateMACD, analyzePriceAction]);
+    if (netSignal > 2) {
+      action = 'BUY';
+      confidence = Math.min(baseConfidence + (netSignal * 5), 95);
+      reasoning = `Bullish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
+    } else if (netSignal < -2) {
+      action = 'SELL';
+      confidence = Math.min(baseConfidence + (Math.abs(netSignal) * 5), 95);
+      reasoning = `Bearish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
+    } else {
+      action = null;
+      confidence = Math.max(baseConfidence - 20, 30);
+      reasoning = `Mixed signals across markets. ${analyzedSymbols} assets analyzed with conflicting indicators`;
+    }
+
+    return { action, confidence: Math.round(confidence), reasoning };
+  }, [calculateRSI, calculateMACD, analyzePriceAction, calculateBollingerBands]);
 
   const generateAdvancedSignal = useCallback((symbol: string, currentPrice: number, data: MarketData): Signal | null => {
     const { previousPrices } = data;

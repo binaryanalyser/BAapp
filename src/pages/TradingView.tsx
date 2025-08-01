@@ -13,7 +13,8 @@ const TradingView: React.FC = () => {
   const { isConnected, subscribeTo } = useWebSocket();
   const { stats: tradingStats, trades } = useTradingContext();
   const [selectedAsset, setSelectedAsset] = useState('R_10');
-  const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
+  const [selectedAsset, setSelectedAsset] = useState('VIX10');
+  const [selectedSymbols] = useState(['VIX10', 'VIX25', 'VIX50', 'VIX75', 'VIX100']);
   const [activeTradeCountdowns, setActiveTradeCountdowns] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
 

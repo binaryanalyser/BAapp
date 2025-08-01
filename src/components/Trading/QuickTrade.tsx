@@ -9,7 +9,7 @@ interface QuickTradeProps {
   selectedAsset?: string;
 }
 
-const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
+const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'VIX10' }) => {
   const { user } = useAuth();
   const { addTrade, updateTrade } = useTradingContext();
   const { ticks } = useWebSocket();

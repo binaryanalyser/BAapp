@@ -15,7 +15,7 @@ const Header: React.FC = () => {
       if (!document.hidden && isAuthenticated) {
         setIsReconnecting(true);
         // Small delay to ensure connection is stable
-        setTimeout(() => setIsReconnecting(false), 2000);
+        setTimeout(() => setIsReconnecting(false), 3000);
       }
     };
 
@@ -23,6 +23,40 @@ const Header: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isAuthenticated]);
 
+  // Add connection status monitoring
+  useEffect(() => {
+    const checkConnection = () => {
+      // Only show reconnecting if we detect actual connection issues
+      const hasRecentActivity = localStorage.getItem('last_activity');
+      const lastActivity = hasRecentActivity ? parseInt(hasRecentActivity) : Date.now();
+      const timeSinceActivity = Date.now() - lastActivity;
+      
+      // Only show reconnecting if it's been more than 30 seconds since last activity
+      if (timeSinceActivity > 30000 && isReconnecting) {
+        setIsReconnecting(false);
+      }
+    };
+
+    const interval = setInterval(checkConnection, 5000);
+    return () => clearInterval(interval);
+  }, [isReconnecting]);
+
+  // Track user activity
+  useEffect(() => {
+    const updateActivity = () => {
+      localStorage.setItem('last_activity', Date.now().toString());
+    };
+
+    window.addEventListener('mousedown', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('scroll', updateActivity);
+    
+    return () => {
+      window.removeEventListener('mousedown', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('scroll', updateActivity);
+    };
+  }, []);
   const navigation = [
     { name: 'Analysis', href: '/', icon: BarChart3 },
     { name: 'Signals', href: '/trading', icon: BarChart3 },
@@ -67,7 +101,7 @@ const Header: React.FC = () => {
                 {isReconnecting && (
                   <div className="flex items-center space-x-2">
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-400"></div>
-                    <span className="text-xs text-blue-400">Reconnecting...</span>
+                    <span className="text-xs text-blue-400">Syncing...</span>
                   </div>
                 )}
                 <div className="text-right">

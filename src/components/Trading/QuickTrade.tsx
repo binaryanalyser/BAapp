@@ -154,8 +154,13 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
   ];
 
   const handleTrade = async () => {
+    // This function is now replaced by handleTradeAction
+  };
+
+  const handleTradeAction = async (contractType: 'CALL' | 'PUT') => {
     if (!user) return;
     
+    setSelectedContract(contractType);
     setIsTrading(true);
     const entryTime = Date.now();
     const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -166,7 +171,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
       
       const newTrade = {
         symbol: selectedAsset,
-        type: selectedContract as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
+        type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
         stake: parseFloat(amount),
         payout: parseFloat(amount) * 1.85,
         profit: 0,
@@ -184,9 +189,9 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
         const exitPrice = ticks[selectedAsset]?.price || currentPrice;
         let isWin = false;
         
-        if (selectedContract === 'CALL') {
+        if (contractType === 'CALL') {
           isWin = exitPrice > currentPrice;
-        } else if (selectedContract === 'PUT') {
+        } else if (contractType === 'PUT') {
           isWin = exitPrice < currentPrice;
         }
         
@@ -274,47 +279,6 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
       </div>
 
       <div className="space-y-6">
-        {/* Contract Type Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-3">
-            Contract Type
-          </label>
-          <div className="grid grid-cols-2 gap-4">
-            {contractTypes.map((type) => {
-              const Icon = type.icon;
-              const isSelected = selectedContract === type.value;
-              return (
-                <button
-                  key={type.value}
-                  onClick={() => setSelectedContract(type.value)}
-                  className={`p-5 rounded-xl text-base font-bold transition-all duration-300 border-3 transform hover:scale-105 relative overflow-hidden ${
-                    isSelected
-                      ? `${type.activeColor} ring-4 ring-opacity-50 ${
-                          type.value === 'CALL' ? 'ring-green-400' : 
-                          type.value === 'PUT' ? 'ring-red-400' :
-                          type.value === 'DIGITMATCH' ? 'ring-blue-400' : 'ring-yellow-400'
-                        } shadow-2xl scale-105`
-                      : `${type.color} border-transparent hover:border-gray-500`
-                  }`}
-                >
-                  {isSelected && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
-                  )}
-                  <div className="relative flex flex-col items-center justify-center space-y-2">
-                    <Icon className={`h-6 w-6 ${isSelected ? 'animate-bounce' : ''}`} />
-                    <span>{type.label}</span>
-                    {isSelected && (
-                      <div className="flex items-center space-x-1 text-xs opacity-90">
-                        <div className="w-1.5 h-1.5 bg-current rounded-full animate-pulse"></div>
-                        <span>Selected</span>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Amount Input */}
         <div>
@@ -416,57 +380,58 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
           </div>
         </div>
 
-        {/* Trade Button */}
-        <button
-          onClick={handleTrade}
-          disabled={isTrading || !user || !currentPrice || !proposalData || isLoadingProposal}
-          className={`w-full disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 px-4 rounded-xl transition-all duration-300 flex items-center justify-center space-x-3 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl text-lg ${
-            selectedContract === 'CALL' 
-              ? 'bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25' 
-              : selectedContract === 'PUT'
-              ? 'bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25'
-              : selectedContract === 'DIGITMATCH'
-              ? 'bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 hover:from-blue-700 hover:via-blue-800 hover:to-blue-900 shadow-blue-500/25'
-              : 'bg-gradient-to-r from-yellow-600 via-yellow-700 to-yellow-800 hover:from-yellow-700 hover:via-yellow-800 hover:to-yellow-900 shadow-yellow-500/25'
-          }`}
-        >
-          {isTrading ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Placing Trade...</span>
-            </>
-          ) : isLoadingProposal ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Getting Prices...</span>
-            </>
-          ) : (
-            <>
-              {selectedContract === 'CALL' ? (
-                <>
-                  <TrendingUp className="h-6 w-6 animate-bounce" />
-                  <span>Trade Higher</span>
-                </>
-              ) : selectedContract === 'PUT' ? (
-                <>
-                  <TrendingDown className="h-6 w-6 animate-bounce" />
-                  <span>Trade Lower</span>
-                </>
-              ) : selectedContract === 'DIGITMATCH' ? (
-                <>
-                  <Target className="h-6 w-6 animate-bounce" />
-                  <span>Trade Matches</span>
-                </>
-              ) : (
-                <>
-                  <Target className="h-6 w-6 animate-bounce" />
-                  <span>Trade Differs</span>
-                </>
-              )}
-              <Zap className="h-4 w-4 animate-pulse" />
-            </>
-          )}
-        </button>
+        {/* Trade Action Buttons */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Trade Higher Button */}
+          <button
+            onClick={() => handleTradeAction('CALL')}
+            disabled={isTrading || !user || !currentPrice || isLoadingProposal}
+            className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25"
+          >
+            {isTrading && selectedContract === 'CALL' ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Placing...</span>
+              </>
+            ) : isLoadingProposal ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Loading...</span>
+              </>
+            ) : (
+              <>
+                <TrendingUp className="h-8 w-8 animate-bounce" />
+                <span className="text-lg">Trade Higher</span>
+                <Zap className="h-4 w-4 animate-pulse" />
+              </>
+            )}
+          </button>
+
+          {/* Trade Lower Button */}
+          <button
+            onClick={() => handleTradeAction('PUT')}
+            disabled={isTrading || !user || !currentPrice || isLoadingProposal}
+            className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25"
+          >
+            {isTrading && selectedContract === 'PUT' ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Placing...</span>
+              </>
+            ) : isLoadingProposal ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-sm">Loading...</span>
+              </>
+            ) : (
+              <>
+                <TrendingDown className="h-8 w-8 animate-bounce" />
+                <span className="text-lg">Trade Lower</span>
+                <Zap className="h-4 w-4 animate-pulse" />
+              </>
+            )}
+          </button>
+        </div>
 
         {!user && (
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">

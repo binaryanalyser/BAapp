@@ -6,9 +6,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTradingContext } from '../../contexts/TradingContext';
 
 interface AssetAnalysisProps {
-  selectedAsset: string;
+  selectedSymbol: string;
 }
-  selectedSymbol?: string;
 interface TechnicalIndicator {
   name: string;
   value: number;

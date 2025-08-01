@@ -35,12 +35,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [subscriptions, setSubscriptions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Auto-reconnect WebSocket if user is authenticated
-    const token = localStorage.getItem('deriv_token');
-    if (token) {
-      derivAPI.connect().catch(console.error);
-    }
-
     const handleTick = (data: any) => {
       if (data.price) {
         setTicks(prev => ({
@@ -63,7 +57,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     derivAPI.onConnection(handleConnection);
 
     return () => {
-      derivAPI.disconnect();
+      // Don't disconnect on unmount to maintain connection
     };
   }, []);
 

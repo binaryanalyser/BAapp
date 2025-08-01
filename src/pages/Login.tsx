@@ -7,7 +7,8 @@ const Login: React.FC = () => {
   const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login, error } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleDerivLogin = () => {
@@ -25,11 +26,12 @@ const Login: React.FC = () => {
     if (!token.trim()) return;
 
     setIsLoading(true);
+    setError(null);
     try {
       await login(token);
       navigate('/');
     } catch (err) {
-      // Error is handled by the auth context
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setIsLoading(false);
     }

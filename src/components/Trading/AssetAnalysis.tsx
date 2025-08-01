@@ -999,7 +999,12 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Current Price:</span>
-                <span className="text-white font-mono text-lg">{currentPrice ? currentPrice.toFixed(4) : '---'}</span>
+                <div className="flex items-center space-x-2">
+                  <span className={`font-mono font-medium text-lg transition-all duration-300 ${getPriceMovementClass()}`}>
+                    {currentPrice ? currentPrice.toFixed(4) : '---'}
+                  </span>
+                  {getPriceMovementIcon()}
+                </div>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Stake:</span>

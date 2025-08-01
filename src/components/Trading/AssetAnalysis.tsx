@@ -50,9 +50,6 @@ interface AISignal {
   indicators: string[];
 }
 
-const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
-  const { ticks } = useWebSocket();
-  const [isLoadingProposal, setIsLoadingProposal] = useState(false);
 const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }) => {
   // Early validation
   if (!selectedSymbol || typeof selectedSymbol !== 'string') {
@@ -66,6 +63,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
     );
   }
 
+  const { ticks } = useWebSocket();
   const { user } = useAuth();
   const { addTrade, updateTrade } = useTradingContext();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -93,6 +91,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
   const [isCollectingData, setIsCollectingData] = useState(true);
   
   // Quick Trade states
+  const [isLoadingProposal, setIsLoadingProposal] = useState(false);
   
   // Validate WebSocket context and tick data
   if (!ticks) {
@@ -236,7 +235,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
     try {
       console.log('Executing real trade:', {
         contractType,
-        symbol: selectedAsset,
+        symbol: selectedSymbol,
         amount: parseFloat(amount),
         duration: parseInt(duration),
         currentPrice
@@ -245,7 +244,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
       // Get proposal first to get the contract details
       const proposalParams = {
         contract_type: contractType,
-        symbol: selectedAsset,
+        symbol: selectedSymbol,
         duration: parseInt(duration),
         duration_unit: 'm',
         amount: parseFloat(amount),
@@ -278,7 +277,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
       console.log('Contract purchased successfully:', buyResponse.buy);
       
       const newTrade = {
-        symbol: selectedAsset,
+        symbol: selectedSymbol,
         type: contractType as 'CALLE' | 'PUTE' | 'DIGITMATCH' | 'DIGITDIFF',
         stake: parseFloat(amount),
         duration: parseInt(duration) * 60, // Convert minutes to seconds
@@ -351,10 +350,11 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
             status: isWin ? 'won' : 'lost',
             exitTime: Date.now(),
             exitPrice: contract.exit_tick || currentPrice,
-        const response = await derivAPI.getContractsFor(selectedSymbol);
             profit
           });
         }
+        
+        const response = await derivAPI.getContractsFor(selectedSymbol);
       }
     } catch (error) {
       console.error('Failed to check trade status:', error);
@@ -851,7 +851,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
       timeframe = '3-8 minutes';
       riskReward = targetPrice ? Math.abs((targetPrice - currentPrice) / (stopLoss! - currentPrice)) : 1.0;
     }
-  }, [selectedContract, selectedSymbol, duration, amount, currentPrice, user?.currency]);
+
     // Adjust confidence based on market conditions
     if (sentiment.overall === action.replace('BUY', 'BULLISH').replace('SELL', 'BEARISH')) {
       confidence = Math.min(95, confidence + 5);
@@ -869,7 +869,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
       indicators: activeIndicators
     };
   };
-    if (selectedSymbol) {
+
   // Perform analysis
   const performAnalysis = () => {
     setIsAnalyzing(true);
@@ -881,14 +881,14 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
       const patterns = detectPricePatterns(priceHistory.prices);
       const recommendation = generateAIRecommendation(indicators, sentiment, patterns);
 
-          symbol: selectedSymbol,
+      setTechnicalIndicators(indicators);
       setMarketSentiment(sentiment);
       setPriceLevels(levels);
       setAiRecommendation(recommendation);
       setLastAnalysis(Date.now());
       setIsAnalyzing(false);
     }, 1500);
-  }, [selectedSymbol]);
+  };
 
   // Auto-analyze when asset changes or every 30 seconds
   useEffect(() => {
@@ -901,8 +901,8 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
       }
     }, 15000); // More frequent updates
     return () => clearInterval(interval);
-  }, [selectedAsset, currentPrice, isCollectingData, priceHistory.prices.length]);
-        symbol: selectedSymbol,
+  }, [selectedSymbol, currentPrice, isCollectingData, priceHistory.prices.length]);
+
   const getSignalColor = (signal: string) => {
     switch (signal) {
       case 'BUY': return 'text-green-400';
@@ -947,7 +947,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
           )}
         </div>
         <div className="text-right">
-          <div className="text-lg font-bold text-white">{selectedAsset}</div>
+          <div className="text-lg font-bold text-white">{selectedSymbol}</div>
           <div className="text-sm text-gray-400">
             {isCollectingData ? 'Initializing...' : `Last: ${new Date(lastAnalysis).toLocaleTimeString()}`}
           </div>
@@ -1130,7 +1130,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
                 </div>
                 <div className="flex items-center justify-center space-x-2 mt-2">
                   {getPriceMovementIcon()}
-                  <span className="text-xs text-gray-400 hidden sm:inline">{selectedAsset}</span>
+                  <span className="text-xs text-gray-400 hidden sm:inline">{selectedSymbol}</span>
                 </div>
               </div>
             </div>
@@ -1287,10 +1287,8 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
               ></div>
             </div>
           </div>
-      <TradingSignals selectedAsset={selectedSymbol} />
-      </div>
+        </div>
       )}
-      <QuickTrade selectedAsset={selectedSymbol} />
     </div>
   );
 };

@@ -8,7 +8,7 @@ import { User, TrendingUp, TrendingDown, Activity, DollarSign, Download } from '
 
 const Dashboard: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
-  const { stats: tradingStats, syncWithDeriv, isLoading: tradesLoading } = useTradingContext();
+  const { stats: tradingStats, syncWithDeriv, loadOpenTrades, isLoading: tradesLoading } = useTradingContext();
   const { isConnected, subscribeTo } = useWebSocket();
   const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -50,6 +50,17 @@ const Dashboard: React.FC = () => {
       setIsSyncing(false);
     }
   };
+
+  // Auto-refresh open trades every 30 seconds
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const interval = setInterval(() => {
+      loadOpenTrades();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [isAuthenticated, loadOpenTrades]);
 
   const metrics = [
     {

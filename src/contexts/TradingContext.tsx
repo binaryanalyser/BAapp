@@ -44,6 +44,8 @@ interface TradingContextType {
   clearTrades: () => void;
   loadTradingHistory: () => Promise<void>;
   syncWithDeriv: () => Promise<void>;
+  loadOpenTrades: () => Promise<void>;
+  sellTrade: (contractId: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -86,7 +88,10 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   // Load trading history from Deriv when user logs in
   useEffect(() => {
     if (isAuthenticated && user) {
-      loadTradingHistory();
+      Promise.all([
+        loadTradingHistory(),
+        loadOpenTrades()
+      ]);
     }
   }, [isAuthenticated, user]);
 
@@ -178,8 +183,115 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     }
   };
 
+  const loadOpenTrades = async () => {
+    if (!isAuthenticated || !derivAPI.getConnectionStatus()) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Get portfolio (open positions)
+      const portfolioResponse = await derivAPI.getPortfolio();
+
+      if (portfolioResponse.portfolio && portfolioResponse.portfolio.contracts) {
+        const openTrades = portfolioResponse.portfolio.contracts.map((contract: any) => {
+          // Parse contract type from shortcode or longcode
+          let contractType: Trade['type'] = 'CALL';
+          const shortcode = contract.shortcode || '';
+          const longcode = contract.longcode || '';
+          
+          if (shortcode.includes('CALL') || longcode.toLowerCase().includes('rise')) {
+            contractType = 'CALL';
+          } else if (shortcode.includes('PUT') || longcode.toLowerCase().includes('fall')) {
+            contractType = 'PUT';
+          } else if (shortcode.includes('DIGITMATCH') || longcode.toLowerCase().includes('matches')) {
+            contractType = 'DIGITMATCH';
+          } else if (shortcode.includes('DIGITDIFF') || longcode.toLowerCase().includes('differs')) {
+            contractType = 'DIGITDIFF';
+          }
+
+          return {
+            id: `deriv_open_${contract.contract_id}`,
+            symbol: contract.underlying || 'Unknown',
+            type: contractType,
+            stake: parseFloat(contract.buy_price || '0'),
+            payout: parseFloat(contract.payout || '0'),
+            profit: parseFloat(contract.profit || '0'),
+            status: 'open' as const,
+            entryTime: (contract.purchase_time || Date.now() / 1000) * 1000,
+            entryPrice: parseFloat(contract.entry_tick || '0'),
+            contractId: contract.contract_id?.toString(),
+            transactionId: contract.transaction_id?.toString(),
+            purchaseTime: contract.purchase_time,
+            longcode: contract.longcode,
+            shortcode: contract.shortcode,
+            duration: contract.duration || 300,
+            barrier: contract.barrier
+          };
+        });
+
+        // Update trades with open positions from Deriv
+        setTrades(prevTrades => {
+          // Remove existing Deriv open trades
+          const filteredTrades = prevTrades.filter(trade => !trade.id.startsWith('deriv_open_'));
+          
+          // Add new open trades and sort by entry time (newest first)
+          const allTrades = [...openTrades, ...filteredTrades].sort((a, b) => b.entryTime - a.entryTime);
+          
+          return allTrades;
+        });
+
+        console.log(`Loaded ${openTrades.length} open trades from Deriv`);
+      }
+
+    } catch (error) {
+      console.error('Failed to load open trades from Deriv:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sellTrade = async (contractId: string) => {
+    if (!isAuthenticated || !derivAPI.getConnectionStatus()) {
+      throw new Error('Not connected to Deriv API');
+    }
+
+    try {
+      const response = await derivAPI.sellContract(parseInt(contractId));
+      
+      if (response.sell) {
+        // Update the trade status locally
+        setTrades(prevTrades => prevTrades.map(trade => {
+          if (trade.contractId === contractId) {
+            const profit = response.sell.sold_for - trade.stake;
+            return {
+              ...trade,
+              status: profit > 0 ? 'won' : 'lost' as const,
+              exitTime: Date.now(),
+              exitPrice: response.sell.sold_for,
+              payout: response.sell.sold_for,
+              profit: profit
+            };
+          }
+          return trade;
+        }));
+
+        console.log('Trade sold successfully:', response.sell);
+        return response.sell;
+      } else {
+        throw new Error('Failed to sell contract');
+      }
+    } catch (error) {
+      console.error('Failed to sell trade:', error);
+      throw error;
+    }
+  };
+
   const syncWithDeriv = async () => {
-    await loadTradingHistory();
+    await Promise.all([
+      loadTradingHistory(),
+      loadOpenTrades()
+    ]);
   };
 
   const addTrade = (trade: Omit<Trade, 'id'>) => {
@@ -338,6 +450,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     clearTrades,
     loadTradingHistory,
     syncWithDeriv,
+    loadOpenTrades,
+    sellTrade,
     isLoading
   };
 

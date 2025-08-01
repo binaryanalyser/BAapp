@@ -6,17 +6,18 @@ import { useTradingContext } from '../contexts/TradingContext';
 import ErrorBoundary from '../components/UI/ErrorBoundary';
 import AssetAnalysis from '../components/Trading/AssetAnalysis';
 import AssetSelector from '../components/Trading/AssetSelector';
-import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause, RefreshCw, Download } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause, RefreshCw, Download, X } from 'lucide-react';
 
 const TradingView: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
   const { isConnected, subscribeTo } = useWebSocket();
-  const { stats: tradingStats, trades, loadTradingHistory, syncWithDeriv, isLoading: tradesLoading } = useTradingContext();
+  const { stats: tradingStats, trades, loadTradingHistory, syncWithDeriv, sellTrade, isLoading: tradesLoading } = useTradingContext();
   const [selectedAsset, setSelectedAsset] = useState('R_10');
   const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
   const [activeTradeCountdowns, setActiveTradeCountdowns] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [sellLoading, setSellLoading] = useState<Record<string, boolean>>({});
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -77,6 +78,22 @@ const TradingView: React.FC = () => {
       console.error('Failed to sync with Deriv:', error);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleSellTrade = async (contractId: string) => {
+    if (!contractId) return;
+    
+    setSellLoading(prev => ({ ...prev, [contractId]: true }));
+    try {
+      await sellTrade(contractId);
+      // Show success notification
+      console.log('Trade sold successfully');
+    } catch (error) {
+      console.error('Failed to sell trade:', error);
+      alert('Failed to sell trade: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setSellLoading(prev => ({ ...prev, [contractId]: false }));
     }
   };
 
@@ -275,6 +292,9 @@ const TradingView: React.FC = () => {
                   displayTrades.map((trade) => {
                     const countdown = activeTradeCountdowns[trade.id];
                     const isActive = trade.status === 'open';
+                    const isDerivedTrade = trade.id.startsWith('deriv_');
+                    const canSell = isActive && isDerivedTrade && trade.contractId;
+                    const isSelling = sellLoading[trade.contractId || ''];
                     
                     return (
                       <div
@@ -289,6 +309,20 @@ const TradingView: React.FC = () => {
                             <span className="text-xs bg-gray-700 px-2 py-1 rounded font-mono">
                               {trade.type}
                             </span>
+                            {isDerivedTrade && (
+                              <span className="text-xs bg-blue-600 px-2 py-1 rounded text-white">
+                                DERIV
+                        {isActive && trade.profit !== 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Current P&L:</span>
+                            <span className={`font-mono ${trade.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {trade.profit >= 0 ? '+' : ''}${trade.profit.toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+                        
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center space-x-2">
                             {isActive ? (
@@ -301,6 +335,20 @@ const TradingView: React.FC = () => {
                                 <Pause className="h-3 w-3 text-gray-400" />
                                 <span className="text-xs text-gray-400">CLOSED</span>
                               </div>
+                            )}
+                            {canSell && (
+                              <button
+                                onClick={() => handleSellTrade(trade.contractId!)}
+                                disabled={isSelling}
+                                className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50"
+                                title="Sell Trade"
+                              >
+                                {isSelling ? (
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-400"></div>
+                                ) : (
+                                  <X className="h-3 w-3" />
+                                )}
+                              </button>
                             )}
                           </div>
                         </div>
@@ -371,6 +419,13 @@ const TradingView: React.FC = () => {
                                 ></div>
                               </div>
                             </div>
+                          </div>
+                        )}
+                        
+                        {trade.contractId && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Contract ID:</span>
+                            <span className="text-white font-mono text-xs">{trade.contractId}</span>
                           </div>
                         )}
 

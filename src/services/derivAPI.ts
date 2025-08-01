@@ -439,5 +439,11 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                   </div>
                 ))}
               </div>
+          )
+          }
+      )
+      }
+  )
+}
 
 export default LiveTicks;

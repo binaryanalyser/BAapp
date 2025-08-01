@@ -877,7 +877,8 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
 
         <div className="space-y-6">
           {/* Amount Input */}
-          <div className="max-w-md mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            <div>
             <label className="block text-sm font-medium text-gray-300 mb-3">
               <DollarSign className="inline h-4 w-4 mr-1" />
               Stake Amount
@@ -905,7 +906,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
           </div>
 
           {/* Duration Selection */}
-          <div className="max-w-md mx-auto">
+            <div>
             <label className="block text-sm font-medium text-gray-300 mb-3">
               <Clock className="inline h-4 w-4 mr-1" />
               Duration
@@ -922,6 +923,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
               <option value="10">10 minutes</option>
               <option value="15">15 minutes</option>
             </select>
+          </div>
           </div>
 
           {/* Trade Summary */}

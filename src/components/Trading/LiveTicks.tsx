@@ -67,9 +67,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   };
 
   const getLastDigit = (price: number, decimals: number) => {
-    if (typeof price !== 'number' || isNaN(price)) {
-      return 0;
-    }
     const fixedPrice = price.toFixed(decimals);
     return parseInt(fixedPrice.slice(-1));
   };
@@ -82,7 +79,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     setConnectionStatus('connecting');
     console.log('Connecting to WebSocket...');
     
-    wsRef.current = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=88454&l=EN');
+    wsRef.current = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089&l=EN');
     
     wsRef.current.onopen = () => {
       console.log('WebSocket connected');
@@ -98,13 +95,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       
       if (data.tick && data.echo_req?.ticks === selectedSymbol) {
         console.log('Received tick for', selectedSymbol, ':', data.tick.tick);
-        
-        // Validate tick data before processing
-        if (typeof data.tick.tick !== 'number' || isNaN(data.tick.tick)) {
-          console.warn('Invalid tick data received:', data.tick);
-          return;
-        }
-        
         const tickData: TickData = {
           id: data.tick.id,
           symbol: data.tick.symbol,
@@ -195,11 +185,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
 
       // Handle errors
       if (data.error) {
-        // Handle "already subscribed" as a warning, not an error
-        if (data.error.message && data.error.message.includes('already subscribed')) {
-          console.warn('Subscription already exists:', data.error.message);
-          return;
-        }
         console.error('WebSocket error:', data.error);
         if (data.error.code === 'InvalidSymbol') {
           console.log('Invalid symbol, trying alternative...');

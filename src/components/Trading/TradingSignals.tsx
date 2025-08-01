@@ -49,6 +49,15 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   const [nextAnalysisTime, setNextAnalysisTime] = useState<number>(Date.now() + 5 * 60 * 1000);
   const [analysisCountdown, setAnalysisCountdown] = useState<number>(0);
 
+  // AI Recommendation state
+  const [aiRecommendation, setAiRecommendation] = useState<{
+    action: 'BUY' | 'SELL' | null;
+    confidence: number;
+    reasoning: string;
+    startTime: number;
+    duration: number;
+  } | null>(null);
+
   // Advanced technical analysis functions
   const calculateRSI = useCallback((prices: number[], period: number = 14): number => {
     if (prices.length < period + 1) return 50;

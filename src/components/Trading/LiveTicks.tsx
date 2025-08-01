@@ -9,7 +9,7 @@ interface LiveTicksProps {
 interface TickData {
   id: string;
   symbol: string;
-  tick: number;
+  price: number;
   epoch: number;
   quote: number;
 }
@@ -94,11 +94,11 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       console.log('WebSocket message:', data);
       
       if (data.tick && data.echo_req?.ticks === selectedSymbol) {
-        console.log('Received tick for', selectedSymbol, ':', data.tick.tick);
+        console.log('Received tick for', selectedSymbol, ':', data.tick.quote);
         const tickData: TickData = {
           id: data.tick.id,
           symbol: data.tick.symbol,
-          tick: data.tick.tick,
+          price: data.tick.quote,
           epoch: data.tick.epoch,
           quote: data.tick.quote
         };
@@ -121,15 +121,15 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         
         // Update live data immediately
         const decimals = getDecimalPlaces(selectedSymbol);
-        const newDigit = getLastDigit(data.tick.tick, decimals);
+        const newDigit = getLastDigit(data.tick.quote, decimals);
         
         setHasReceivedData(true);
         setDigits(prev => [...prev.slice(1), newDigit]);
         setDigitHistory(prev => [...prev, newDigit].slice(-100)); // Keep last 100 digits
-        setPrices(prev => [...prev.slice(-19), data.tick.tick]);
+        setPrices(prev => [...prev.slice(-19), data.tick.quote]);
         setChartData(prev => [...prev.slice(-19), {
           time: data.tick.epoch * 1000,
-          price: data.tick.tick,
+          price: data.tick.quote,
           timestamp: data.tick.epoch
         }]);
       }
@@ -342,6 +342,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   };
 
   const currentPrice = currentTick?.tick || 0;
+  const currentPrice = currentTick?.price || 0;
   const decimals = getDecimalPlaces(selectedSymbol);
   const currentDigit = currentPrice ? getLastDigit(currentPrice, decimals) : 0;
   

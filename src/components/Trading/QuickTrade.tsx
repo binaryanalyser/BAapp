@@ -26,7 +26,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
   const [tradeSuccess, setTradeSuccess] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const currentPrice = ticks[selectedAsset]?.tick || 0;
+  const currentPrice = ticks[selectedAsset]?.price || 0;
 
   // Load available contracts when asset changes
   useEffect(() => {

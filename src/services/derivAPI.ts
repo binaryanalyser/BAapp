@@ -1,6 +1,6 @@
 // Deriv API WebSocket service
 export interface TickData {
-  tick: number;
+  price: number;
   epoch: number;
   symbol: string;
   quote: number;
@@ -129,7 +129,7 @@ class DerivAPI {
     // Handle tick data
     if (data.tick) {
       const tickData: TickData = {
-        tick: data.tick.quote,
+        price: data.tick.quote,
         epoch: data.tick.epoch,
         symbol: data.tick.symbol,
         quote: data.tick.quote

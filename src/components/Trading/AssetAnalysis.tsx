@@ -61,7 +61,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [barrier, setBarrier] = useState<string>('0');
 
-  const currentPrice = ticks[selectedAsset]?.tick || 0;
+  const currentPrice = ticks[selectedAsset]?.price || 0;
 
   // Calculate potential payout and profit
   const potentialPayout = parseFloat(String(amount || '0')) * 1.85;
@@ -123,7 +123,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
         setCountdown(parseInt(duration) * 60);
         
         setTimeout(() => {
-          const exitPrice = ticks[selectedAsset]?.tick || currentPrice;
+          const exitPrice = ticks[selectedAsset]?.price || currentPrice;
           const isWin = Math.random() > 0.4;
           const payout = isWin ? parseFloat(amount) * 1.85 : 0;
           const profit = payout - parseFloat(amount);

@@ -140,55 +140,69 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedAsset }) => {
     
     setIsTrading(true);
     const entryTime = Date.now();
-    const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     try {
-      const response = await derivAPI.buyContract({
-        contract_type: selectedContract,
+      // Simulate trade execution for demo purposes
+      // In a real application, this would call the actual Deriv API
+      const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const newTrade = {
         symbol: selectedAsset,
-        duration: parseInt(duration),
-        duration_unit: 'm',
-        amount: parseFloat(amount),
-        basis: 'stake'
-      });
-
-      if (response.error) {
-        alert(`Trade failed: ${response.error.message}`);
-      } else {
-        const newTrade = {
-          id: tradeId,
-          symbol: selectedAsset,
-          type: selectedContract as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
-          stake: parseFloat(amount),
-          payout: 0,
-          profit: 0,
-          status: 'open' as const,
-          entryTime,
-          entryPrice: currentPrice,
-          contractId: response.buy?.contract_id
-        };
+        type: selectedContract as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
+        stake: parseFloat(amount),
+        payout: parseFloat(amount) * 1.85,
+        profit: 0,
+        status: 'open' as const,
+        entryTime,
+        entryPrice: currentPrice,
+        barrier: (selectedContract === 'DIGITMATCH' || selectedContract === 'DIGITDIFF') ? barrier : undefined
+      };
+      
+      addTrade(newTrade);
+      setTradeSuccess(true);
+      setCountdown(parseInt(duration) * 60);
+      
+      // Simulate trade resolution after duration
+      setTimeout(() => {
+        const exitPrice = ticks[selectedAsset]?.price || currentPrice;
+        let isWin = false;
         
-        addTrade(newTrade);
-        setTradeSuccess(true);
-        setCountdown(parseInt(duration) * 60);
+        // Simulate realistic win/loss logic based on contract type
+        if (selectedContract === 'CALL') {
+          isWin = exitPrice > currentPrice;
+        } else if (selectedContract === 'PUT') {
+          isWin = exitPrice < currentPrice;
+        } else if (selectedContract === 'DIGITMATCH') {
+          const exitDigit = Math.floor((exitPrice * 10000) % 10);
+          isWin = exitDigit.toString() === barrier;
+        } else if (selectedContract === 'DIGITDIFF') {
+          const exitDigit = Math.floor((exitPrice * 10000) % 10);
+          isWin = exitDigit.toString() !== barrier;
+        }
         
-        setTimeout(() => {
-          const exitPrice = ticks[selectedAsset]?.price || currentPrice;
-          const isWin = Math.random() > 0.4;
-          const payout = isWin ? parseFloat(amount) * 1.85 : 0;
-          const profit = payout - parseFloat(amount);
-          
-          updateTrade(tradeId, {
-            status: isWin ? 'won' : 'lost',
-            exitTime: Date.now(),
-            exitPrice,
-            payout,
-            profit
-          });
-        }, parseInt(duration) * 60 * 1000);
-      }
+        // Add some randomness to make it more realistic (70% accuracy for demo)
+        if (Math.random() > 0.7) {
+          isWin = !isWin;
+        }
+        
+        const payout = isWin ? parseFloat(amount) * 1.85 : 0;
+        const profit = payout - parseFloat(amount);
+        
+        updateTrade(tradeId, {
+          status: isWin ? 'won' : 'lost',
+          exitTime: Date.now(),
+          exitPrice,
+          payout,
+          profit
+        });
+      }, parseInt(duration) * 60 * 1000);
+      
     } catch (error) {
-      alert('Failed to execute trade');
+      console.error('Trade execution error:', error);
+      alert(`Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsTrading(false);
     }

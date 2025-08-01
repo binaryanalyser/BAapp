@@ -158,45 +158,57 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
     
     setIsTrading(true);
     const entryTime = Date.now();
+    const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     try {
-      const contractParams = {
-        contract_type: selectedContract,
+      // Simulate trade execution for demo purposes
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const newTrade = {
         symbol: selectedAsset,
-        duration: parseInt(duration),
-        duration_unit: 'm',
-        amount: parseFloat(amount),
-        basis: 'stake',
-        currency: user.currency,
-        proposal_id: proposalData.id
+        type: selectedContract as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
+        stake: parseFloat(amount),
+        payout: parseFloat(amount) * 1.85,
+        profit: 0,
+        status: 'open' as const,
+        entryTime,
+        entryPrice: currentPrice
       };
-
-      const response = await derivAPI.buyContract(contractParams);
-
-      if (response.error) {
-        alert(`Trade failed: ${response.error.message}`);
-      } else {
-        // Add trade to app context
-        const newTrade = {
-          symbol: selectedAsset,
-          type: selectedContract as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
-          stake: response.buy?.buy_price || parseFloat(amount),
-          payout: response.buy?.payout || 0,
-          profit: 0,
-          status: 'open' as const,
-          entryTime,
-          entryPrice: currentPrice,
-          contractId: response.buy?.contract_id
-        };
+      
+      addTrade(newTrade);
+      setTradeSuccess(true);
+      setCountdown(parseInt(duration) * 60);
+      
+      // Simulate trade resolution
+      setTimeout(() => {
+        const exitPrice = ticks[selectedAsset]?.price || currentPrice;
+        let isWin = false;
         
-        addTrade(newTrade);
+        if (selectedContract === 'CALL') {
+          isWin = exitPrice > currentPrice;
+        } else if (selectedContract === 'PUT') {
+          isWin = exitPrice < currentPrice;
+        }
         
-        // Show success animation
-        setTradeSuccess(true);
-        setCountdown(parseInt(duration) * 60);
-      }
+        // Add randomness for demo (70% win rate)
+        if (Math.random() > 0.7) {
+          isWin = !isWin;
+        }
+        
+        const payout = isWin ? parseFloat(amount) * 1.85 : 0;
+        const profit = payout - parseFloat(amount);
+        
+        updateTrade(tradeId, {
+          status: isWin ? 'won' : 'lost',
+          exitTime: Date.now(),
+          exitPrice,
+          payout,
+          profit
+        });
+      }, parseInt(duration) * 60 * 1000);
+      
     } catch (error) {
-      console.error('Trade execution failed:', error);
+      console.error('Trade execution error:', error);
       alert(`Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsTrading(false);

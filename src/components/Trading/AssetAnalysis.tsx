@@ -92,12 +92,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
       </div>
 
       {/* Quick Trade Section */}
-      <div className="border-t border-gray-700 pt-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <Zap className="h-5 w-5 text-yellow-400" />
-          <h4 className="text-lg font-semibold text-white">Quick Trade</h4>
-          <span className="text-xs text-gray-400">Execute trades based on AI signals</span>
-        </div>
+      <div className="mt-6">
         <QuickTrade selectedAsset={selectedSymbol} />
       </div>
     </div>

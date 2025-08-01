@@ -125,11 +125,11 @@ const TradingView: React.FC = () => {
       color: 'text-blue-400'
     },
     {
-      name: 'Today\'s Signals',
-      value: tradingStats.todaySignals.toString(),
-      change: `+${Math.floor(tradingStats.todaySignals * 0.2)} new`,
-      icon: TrendingDown,
-      color: 'text-yellow-400'
+      name: 'Today\'s P&L',
+      value: `$${tradingStats.dailyProfit.toFixed(2)}`,
+      change: tradingStats.dailyProfit >= 0 ? 'Profit' : 'Loss',
+      icon: TrendingUp,
+      color: tradingStats.dailyProfit >= 0 ? 'text-green-400' : 'text-red-400'
     }
   ];
 

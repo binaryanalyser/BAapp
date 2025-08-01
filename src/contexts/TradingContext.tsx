@@ -28,7 +28,6 @@ interface TradingStats {
   totalProfit: number;
   winRate: number;
   activeTrades: number;
-  todaySignals: number;
   totalTrades: number;
   winningTrades: number;
   dailyProfit: number;
@@ -424,14 +423,10 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       .filter(trade => trade.exitTime && new Date(trade.exitTime) >= monthAgo)
       .reduce((sum, trade) => sum + trade.profit, 0);
 
-    // Mock today's signals count (would be tracked separately in a real app)
-    const todaySignals = Math.floor(Math.random() * 15) + 10;
-
     return {
       totalProfit,
       winRate,
       activeTrades,
-      todaySignals,
       totalTrades,
       winningTrades,
       dailyProfit,

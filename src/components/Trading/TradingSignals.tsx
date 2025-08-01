@@ -351,6 +351,12 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
   // Perform AI Analysis
   const performAnalysis = useCallback(() => {
+    // Don't analyze if there's an active AI recommendation
+    if (aiRecommendation && aiCountdown > 0) {
+      console.log('Skipping analysis - AI recommendation is still active');
+      return;
+    }
+    
     // Prevent multiple simultaneous analyses
     if (isAnalysisActive) {
       console.log('Analysis already in progress, skipping...');
@@ -421,8 +427,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
 
   // Handle duration change
   useEffect(() => {
-    // Only restart analysis if no active recommendation or if duration changed significantly
-    if (!isInitializing && Object.keys(marketData).length > 0 && !aiRecommendation) {
+    // Only restart analysis if no active recommendation
+    if (!isInitializing && Object.keys(marketData).length > 0 && (!aiRecommendation || aiCountdown === 0)) {
       console.log(`Duration changed to ${signalDuration} minutes. Restarting analysis...`);
       performAnalysis();
     }
@@ -436,12 +442,16 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
           const newCount = prev - 1;
           if (newCount === 0) {
             // Clear current recommendation and perform new analysis
+            console.log('AI recommendation expired, clearing and starting new analysis');
             setAiRecommendation(null);
             setLastRecommendationTime(0);
             setAnalysisStatus('analyzing');
             
             // Delay new analysis slightly to show transition
-            setTimeout(() => performAnalysis(), 1000);
+            setTimeout(() => {
+              console.log('Starting new analysis after recommendation expiry');
+              performAnalysis();
+            }, 1000);
           }
           return newCount;
         });
@@ -722,6 +732,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
             {!aiRecommendation && !isInitializing && analysisStatus !== 'analyzing' && (
               <button
                 onClick={performAnalysis}
+                disabled={aiRecommendation && aiCountdown > 0}
                 className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
               >
                 Start AI Analysis

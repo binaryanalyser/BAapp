@@ -13,10 +13,16 @@ interface ChartDataPoint {
   timestamp: number;
 }
 
+interface DigitData {
+  digit: number;
+  movement: 'up' | 'down' | 'none';
+  isRecent: boolean;
+}
+
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const { ticks, isConnected, subscribeTo } = useWebSocket();
   const [selectedSymbol, setSelectedSymbol] = useState('R_10');
-  const [digits, setDigits] = useState<number[]>(Array(20).fill(0));
+  const [digits, setDigits] = useState<DigitData[]>(Array(20).fill({ digit: 0, movement: 'none', isRecent: false }));
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [prices, setPrices] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,13 +33,25 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   
   // Extended digit history for analysis (up to 100+ digits)
   const [digitHistory, setDigitHistory] = useState<number[]>([]);
+  const [priceHistory, setPriceHistory] = useState<number[]>([]);
+
+  // Asset configurations based on digits.js
+  const assetConfigs = {
+    'R_100': { decimals: 2, label: '100' },
+    'R_10': { decimals: 3, label: '10' },
+    'R_25': { decimals: 3, label: '25' },
+    'R_50': { decimals: 4, label: '50' },
+    'R_75': { decimals: 4, label: '75' },
+    'RDBEAR': { decimals: 4, label: 'Bear' },
+    'RDBULL': { decimals: 4, label: 'Bull' }
+  };
 
   const volatilityIndices = [
-    { symbol: 'R_10', label: '10', name: 'Volatility 10', decimals: 3 },
-    { symbol: 'R_25', label: '25', name: 'Volatility 25', decimals: 3 },
-    { symbol: 'R_50', label: '50', name: 'Volatility 50', decimals: 4 },
-    { symbol: 'R_75', label: '75', name: 'Volatility 75', decimals: 4 },
-    { symbol: 'R_100', label: '100', name: 'Volatility 100', decimals: 2 }
+    { symbol: 'R_10', label: '10', name: 'Volatility 10 Index' },
+    { symbol: 'R_25', label: '25', name: 'Volatility 25 Index' },
+    { symbol: 'R_50', label: '50', name: 'Volatility 50 Index' },
+    { symbol: 'R_75', label: '75', name: 'Volatility 75 Index' },
+    { symbol: 'R_100', label: '100', name: 'Volatility 100 Index' }
   ];
 
   const categories = [
@@ -42,14 +60,22 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     { id: 'matchdiffers', label: 'MATCH/DIFFERS' }
   ];
 
-  const getDecimalPlaces = (symbol: string) => {
-    const index = volatilityIndices.find(vi => vi.symbol === symbol);
-    return index?.decimals || 4;
+  // Get decimal places for symbol (based on digits.js xd variable)
+  const getDecimalPlaces = (symbol: string): number => {
+    return assetConfigs[symbol as keyof typeof assetConfigs]?.decimals || 4;
   };
 
-  const getLastDigit = (price: number, decimals: number) => {
+  // Extract last digit from price (based on digits.js logic)
+  const getLastDigit = (price: number, decimals: number): number => {
     const fixedPrice = price.toFixed(decimals);
     return parseInt(fixedPrice.slice(-1));
+  };
+
+  // Determine price movement direction (based on digits.js toggleDigit logic)
+  const getPriceMovement = (currentPrice: number, previousPrice: number): 'up' | 'down' | 'none' => {
+    if (currentPrice > previousPrice) return 'up';
+    if (currentPrice < previousPrice) return 'down';
+    return 'none';
   };
 
   // Subscribe to selected symbol when it changes or when connected
@@ -60,55 +86,108 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     }
   }, [selectedSymbol, isConnected, subscribeTo]);
 
-  // Process tick data from context
+  // Process tick data from context (based on digits.js ws.onmessage logic)
   useEffect(() => {
     const tick = ticks[selectedSymbol];
     if (tick) {
       console.log('Received tick for', selectedSymbol, ':', tick.tick);
       
       const decimals = getDecimalPlaces(selectedSymbol);
-      const newDigit = getLastDigit(tick.tick, decimals);
+      const currentPrice = tick.tick;
+      const newDigit = getLastDigit(currentPrice, decimals);
       
       setHasReceivedData(true);
       setIsLoading(false);
-      setDigits(prev => [...prev.slice(1), newDigit]);
+      
+      // Update price history
+      setPriceHistory(prev => {
+        const newHistory = [...prev, currentPrice];
+        return newHistory.slice(-21); // Keep last 21 prices (current + 20 previous)
+      });
+      
+      // Update digit history
       setDigitHistory(prev => [...prev, newDigit].slice(-100));
-      setPrices(prev => [...prev.slice(-19), tick.tick]);
+      
+      // Update digits array with movement detection (based on digits.js logic)
+      setDigits(prev => {
+        const newDigits = [...prev];
+        
+        // Shift all digits left and add new digit at the end
+        for (let i = 0; i < newDigits.length - 1; i++) {
+          newDigits[i] = {
+            ...newDigits[i + 1],
+            isRecent: false
+          };
+        }
+        
+        // Determine movement for new digit
+        let movement: 'up' | 'down' | 'none' = 'none';
+        if (priceHistory.length > 0) {
+          const previousPrice = priceHistory[priceHistory.length - 1];
+          movement = getPriceMovement(currentPrice, previousPrice);
+        }
+        
+        // Add new digit
+        newDigits[newDigits.length - 1] = {
+          digit: newDigit,
+          movement,
+          isRecent: true
+        };
+        
+        return newDigits;
+      });
+      
+      // Update chart data
       setChartData(prev => [...prev.slice(-19), {
         time: tick.epoch * 1000,
         price: tick.tick,
         timestamp: tick.epoch
       }]);
+      
+      // Update prices for display
+      setPrices(prev => [...prev.slice(-19), tick.tick]);
     }
-  }, [ticks, selectedSymbol]);
+  }, [ticks, selectedSymbol, priceHistory]);
 
   const handleSymbolChange = (symbol: string) => {
     console.log('Changing symbol to:', symbol);
     setSelectedSymbol(symbol);
+    // Reset data when changing symbols
+    setDigits(Array(20).fill({ digit: 0, movement: 'none', isRecent: false }));
+    setDigitHistory([]);
+    setPriceHistory([]);
+    setChartData([]);
+    setPrices([]);
+    setHasReceivedData(false);
+    setIsLoading(true);
   };
 
-  const getDigitColor = (digit: number, index: number) => {
+  // Get digit styling based on value and movement (based on digits.js CSS classes)
+  const getDigitStyling = (digitData: DigitData, index: number) => {
+    const { digit, movement, isRecent } = digitData;
     const isEven = digit % 2 === 0;
-    const isRecent = index >= 15; // Last 5 digits are more prominent
+    const isLast5 = index >= 15; // Last 5 digits are more prominent
     
-    if (isRecent) {
-      return isEven ? 'bg-blue-500 text-white shadow-lg' : 'bg-red-500 text-white shadow-lg';
+    let baseClass = 'w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ';
+    
+    // Color based on even/odd
+    if (isLast5 || isRecent) {
+      baseClass += isEven ? 'bg-blue-500 text-white shadow-lg ' : 'bg-red-500 text-white shadow-lg ';
     } else {
-      return isEven ? 'bg-blue-400 text-white' : 'bg-red-400 text-white';
+      baseClass += isEven ? 'bg-blue-400 text-white ' : 'bg-red-400 text-white ';
     }
-  };
-
-  const getPriceMovement = (index: number) => {
-    if (index === 0 || prices.length < 2) return 'none';
-    const current = prices[index];
-    const previous = prices[index - 1];
     
-    if (current > previous) return 'up';
-    if (current < previous) return 'down';
-    return 'none';
+    // Movement animation classes (based on digits.js digits_moved_up/down)
+    if (movement === 'up') {
+      baseClass += 'animate-bounce border-2 border-green-400 ';
+    } else if (movement === 'down') {
+      baseClass += 'animate-bounce border-2 border-red-400 ';
+    }
+    
+    return baseClass;
   };
 
-  // Digit analysis functions
+  // Digit analysis functions (enhanced from original logic)
   const analyzeDigits = () => {
     if (digitHistory.length === 0) return null;
     
@@ -144,22 +223,8 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   };
 
   const analysis = analyzeDigits();
-
-  const getMovementClass = (movement: string) => {
-    switch (movement) {
-      case 'up':
-        return 'border-2 border-green-400';
-      case 'down':
-        return 'border-2 border-red-400';
-      default:
-        return '';
-    }
-  };
-
   const currentPrice = ticks[selectedSymbol]?.tick || 0;
-  const decimals = getDecimalPlaces(selectedSymbol);
-  const currentDigit = currentPrice ? getLastDigit(currentPrice, decimals) : 0;
-  
+
   // Get content based on active category
   const getCategoryContent = () => {
     switch (activeCategory) {
@@ -169,7 +234,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
             {volatilityIndices.map((index) => (
               <button
                 key={index.symbol}
-                onClick={() => setSelectedSymbol(index.symbol)}
+                onClick={() => handleSymbolChange(index.symbol)}
                 className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                   selectedSymbol === index.symbol
                     ? 'bg-gray-900 text-white border border-gray-500'
@@ -208,7 +273,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                 </div>
               </div>
               
-              {/* Prediction */}
+              {/* Prediction based on imbalance */}
               {analysis && (
                 <div className="mt-4 p-3 bg-gray-800 rounded-lg">
                   <div className="flex items-center justify-between">
@@ -236,15 +301,22 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
             <div className="bg-gray-700 rounded-lg p-4 mb-4">
               <h4 className="text-white font-medium mb-3">Match/Differs Analysis</h4>
               
-              {/* Digit Selection */}
+              {/* Digit frequency display */}
               <div className="mb-4">
-                <label className="block text-sm text-gray-300 mb-2">Select Target Digit:</label>
+                <label className="block text-sm text-gray-300 mb-2">Digit Frequency:</label>
                 <div className="grid grid-cols-5 gap-2">
                   {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(digit => {
                     const count = analysis ? analysis.digitCounts[digit] : 0;
                     const percentage = analysis ? ((count / analysis.totalCount) * 100).toFixed(1) : '0';
+                    const isHottest = analysis && analysis.hottestNumbers.includes(digit);
+                    const isColdest = analysis && analysis.coldestNumbers.includes(digit);
+                    
                     return (
-                      <div key={digit} className="text-center p-2 bg-gray-800 rounded border border-gray-600">
+                      <div key={digit} className={`text-center p-2 rounded border ${
+                        isHottest ? 'bg-red-600/20 border-red-500' :
+                        isColdest ? 'bg-blue-600/20 border-blue-500' :
+                        'bg-gray-800 border-gray-600'
+                      }`}>
                         <div className="text-lg font-bold text-white">{digit}</div>
                         <div className="text-xs text-gray-400">{count}x</div>
                         <div className="text-xs text-gray-500">{percentage}%</div>
@@ -254,7 +326,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                 </div>
               </div>
               
-              {/* Match/Differs Prediction */}
+              {/* Match/Differs prediction */}
               {analysis && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-green-600/20 rounded-lg border border-green-500">
@@ -292,8 +364,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         <h3 className="text-xl font-semibold text-white">Live Ticks</h3>
         <div className="flex items-center space-x-2">
           <div className={`w-2 h-2 rounded-full ${
-            isConnected ? 'bg-green-400 animate-pulse' : 
-            'bg-red-400'
+            isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'
           }`}></div>
           <span className="text-sm text-gray-400">
             {isConnected ? 'Live' : 'Disconnected'}
@@ -330,27 +401,32 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         </div>
       ) : (
         <>
-          {/* Horizontal Tick Display */}
+          {/* Current Price Display */}
+          <div className="mb-4 text-center">
+            <div className="text-2xl font-bold text-white font-mono">
+              {currentPrice ? currentPrice.toFixed(getDecimalPlaces(selectedSymbol)) : '---'}
+            </div>
+            <div className="text-sm text-gray-400">{selectedSymbol} Current Price</div>
+          </div>
+
+          {/* Horizontal Digit Display (based on digits.js #digits) */}
           <div className="mb-6">
             <div className="flex items-center justify-center space-x-2 mb-4">
               <span className="text-sm text-gray-400">Last Digits:</span>
               <div className="flex space-x-1 overflow-x-auto">
-                {hasReceivedData && digits.map((digit, index) => {
-                  const movement = getPriceMovement(index);
-                  return (
-                    <div
-                      key={index}
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ${getDigitColor(digit, index)} ${getMovementClass(movement)}`}
-                    >
-                      {digit}
-                    </div>
-                  );
-                })}
+                {hasReceivedData && digits.map((digitData, index) => (
+                  <div
+                    key={index}
+                    className={getDigitStyling(digitData, index)}
+                  >
+                    {digitData.digit}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Mini Chart */}
+          {/* Mini Chart (based on digits.js CanvasJS chart) */}
           <div className="h-32 mb-4 bg-gray-750 rounded-lg p-2">
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -371,7 +447,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value: any) => [value.toFixed(decimals), 'Price']}
+                    formatter={(value: any) => [value.toFixed(getDecimalPlaces(selectedSymbol)), 'Price']}
                     labelFormatter={(time: any) => new Date(time).toLocaleTimeString()}
                     contentStyle={{
                       backgroundColor: '#1F2937',
@@ -441,12 +517,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
               </div>
             </div>
           )}
-          <div className="bg-gray-750 rounded-lg p-3">
-            <div className="text-lg font-bold text-blue-400">
-              {analysis ? analysis.evenCount : digits.filter(d => d % 2 === 0).length}
-            </div>
-            <div className="text-xs text-gray-400">Even</div>
-          </div>
         </>
       )}
     </div>

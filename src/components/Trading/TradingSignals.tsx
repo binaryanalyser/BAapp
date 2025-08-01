@@ -43,7 +43,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   const { ticks } = useWebSocket();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
-  const [analysisStatus, setAnalysisStatus] = useState<'analyzing' | 'ready' | 'generating'>('ready');
+  const [analysisStatus, setAnalysisStatus] = useState<'analyzing' | 'ready' | 'generating'>('analyzing');
   const [lastAnalysis, setLastAnalysis] = useState<number>(Date.now());
 
   // Advanced technical analysis functions
@@ -333,148 +333,215 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <Brain className="h-6 w-6 text-blue-400" />
-          <h3 className="text-xl font-semibold text-white">AI Trading Signals</h3>
-          {analysisStatus === 'analyzing' && (
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-              <span className="text-sm text-blue-400">Analyzing...</span>
+    <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-xl border border-gray-600 shadow-2xl overflow-hidden">
+      {/* Header Section */}
+      <div className="bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-blue-600/20 border-b border-gray-600 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <div className="absolute inset-0 bg-blue-500 rounded-full animate-pulse opacity-20"></div>
+              <Brain className="h-8 w-8 text-blue-400 relative z-10" />
             </div>
-          )}
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center text-sm text-gray-400">
-            <Activity className="h-4 w-4 mr-1" />
-            <span>Live Analysis</span>
+            <div>
+              <h3 className="text-2xl font-bold text-white">AI Trading Signals</h3>
+              <p className="text-sm text-gray-300">Advanced algorithmic analysis</p>
+            </div>
           </div>
-          <div className="text-xs text-gray-500">
-            Last: {new Date(lastAnalysis).toLocaleTimeString()}
+          
+          <div className="flex items-center space-x-6">
+            {/* Analysis Status */}
+            <div className="flex items-center space-x-3">
+              {analysisStatus === 'analyzing' ? (
+                <>
+                  <div className="relative">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent"></div>
+                    <div className="absolute inset-0 animate-ping rounded-full h-5 w-5 border border-blue-400 opacity-20"></div>
+                  </div>
+                  <span className="text-sm text-blue-400 font-medium">Analyzing Markets...</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
+                  <span className="text-sm text-green-400 font-medium">Live Analysis</span>
+                </>
+              )}
+            </div>
+            
+            {/* Stats */}
+            <div className="hidden md:flex items-center space-x-4 text-sm">
+              <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
+                <div className="text-blue-400 font-bold">{signals.length}</div>
+                <div className="text-gray-400 text-xs">Active</div>
+              </div>
+              <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
+                <div className="text-green-400 font-bold">{Object.keys(marketData).length}</div>
+                <div className="text-gray-400 text-xs">Assets</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
+      {/* Content Section */}
+      <div className="p-6">
         {signals.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
-            <div className="flex justify-center mb-4">
-              <div className="relative">
-                <Brain className="h-12 w-12 opacity-50" />
-                <div className="absolute -top-1 -right-1">
-                  <Zap className="h-4 w-4 text-yellow-400 animate-pulse" />
+          <div className="text-center py-16">
+            <div className="relative mb-8">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-24 h-24 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full animate-pulse"></div>
+              </div>
+              <div className="relative flex items-center justify-center">
+                <Brain className="h-16 w-16 text-blue-400 opacity-60" />
+                <div className="absolute -top-2 -right-2">
+                  <Zap className="h-6 w-6 text-yellow-400 animate-bounce" />
                 </div>
               </div>
             </div>
-            <p>AI is analyzing {selectedAsset || 'market'} conditions...</p>
-            <p className="text-sm mt-1">Advanced algorithms processing {Object.keys(marketData).length} assets</p>
+            <h4 className="text-xl font-semibold text-white mb-2">
+              AI Market Analysis in Progress
+            </h4>
+            <p className="text-gray-400 mb-4">
+              Advanced algorithms are processing {selectedAsset || 'market'} conditions...
+            </p>
+            <div className="flex items-center justify-center space-x-6 text-sm">
+              <div className="flex items-center space-x-2">
+                <Activity className="h-4 w-4 text-blue-400" />
+                <span className="text-gray-300">Real-time Analysis</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Target className="h-4 w-4 text-green-400" />
+                <span className="text-gray-300">Pattern Recognition</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Brain className="h-4 w-4 text-purple-400" />
+                <span className="text-gray-300">ML Predictions</span>
+              </div>
+            </div>
           </div>
         ) : (
-          signals.map((signal) => (
-            <div
-              key={signal.id}
-              className={`rounded-lg border-2 p-4 transition-all hover:shadow-lg ${getSignalColor(signal.type)} ${
-                signal.strength === 'CRITICAL' ? 'ring-2 ring-red-400/50' : ''
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  {getSignalIcon(signal.type)}
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold text-white">{signal.symbol}</span>
-                      <span className="text-sm bg-gray-700 px-2 py-1 rounded font-mono">
-                        {signal.type}
-                      </span>
-                      {signal.isLive && (
-                        <div className="flex items-center space-x-1">
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          <span className="text-xs text-green-400">LIVE</span>
-                        </div>
-                      )}
+          <div className="space-y-4">
+            {signals.map((signal) => (
+              <div
+                key={signal.id}
+                className={`relative rounded-xl border-2 p-6 transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${getSignalColor(signal.type)} ${
+                  signal.strength === 'CRITICAL' ? 'ring-2 ring-red-400/50 animate-pulse' : ''
+                }`}
+              >
+                {/* Signal Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative">
+                      <div className={`absolute inset-0 rounded-full animate-pulse ${
+                        signal.type === 'CALL' ? 'bg-green-500/20' :
+                        signal.type === 'PUT' ? 'bg-red-500/20' :
+                        signal.type === 'MATCH' ? 'bg-blue-500/20' : 'bg-yellow-500/20'
+                      }`}></div>
+                      <div className="relative p-2 rounded-full bg-gray-700/50">
+                        {getSignalIcon(signal.type)}
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-400 mt-1">{signal.reasoning}</p>
+                    <div>
+                      <div className="flex items-center space-x-3 mb-1">
+                        <span className="text-xl font-bold text-white">{signal.symbol}</span>
+                        <span className="px-3 py-1 bg-gray-700 rounded-full text-sm font-medium text-white">
+                          {signal.type}
+                        </span>
+                        {signal.isLive && (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-green-400 font-medium">LIVE</span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-gray-300 text-sm leading-relaxed max-w-md">{signal.reasoning}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right">
+                    <div className={`text-lg font-bold mb-1 ${getStrengthColor(signal.strength)}`}>
+                      {signal.strength}
+                      {signal.strength === 'CRITICAL' && <AlertCircle className="inline h-4 w-4 ml-1" />}
+                    </div>
+                    <div className="text-2xl font-bold text-white mb-1">{signal.confidence}%</div>
+                    {signal.isLive && (
+                      <div className="text-sm text-yellow-400 font-mono bg-gray-700/50 px-2 py-1 rounded">
+                        {formatCountdown(signal.countdown)}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className={`text-sm font-medium ${getStrengthColor(signal.strength)}`}>
-                    {signal.strength}
-                    {signal.strength === 'CRITICAL' && <AlertCircle className="inline h-3 w-3 ml-1" />}
-                  </div>
-                  <div className="text-sm text-gray-400">{signal.confidence}%</div>
-                  {signal.isLive && (
-                    <div className="text-xs text-yellow-400 font-mono">
-                      {formatCountdown(signal.countdown)}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Technical Indicators */}
-              <div className="grid grid-cols-2 gap-3 mb-3 p-3 bg-gray-900/50 rounded">
-                <div className="text-xs">
-                  <span className="text-gray-400">RSI:</span>
-                  <span className={`ml-1 font-mono ${
-                    signal.indicators.rsi < 30 ? 'text-green-400' : 
-                    signal.indicators.rsi > 70 ? 'text-red-400' : 'text-gray-300'
-                  }`}>
-                    {signal.indicators.rsi}
-                  </span>
-                </div>
-                <div className="text-xs">
-                  <span className="text-gray-400">MACD:</span>
-                  <span className={`ml-1 capitalize ${
-                    signal.indicators.macd === 'bullish' ? 'text-green-400' :
-                    signal.indicators.macd === 'bearish' ? 'text-red-400' : 'text-gray-300'
-                  }`}>
-                    {signal.indicators.macd}
-                  </span>
-                </div>
-                <div className="text-xs">
-                  <span className="text-gray-400">Bollinger:</span>
-                  <span className={`ml-1 capitalize ${
-                    signal.indicators.bollinger === 'squeeze' ? 'text-yellow-400' :
-                    signal.indicators.bollinger === 'expansion' ? 'text-blue-400' : 'text-gray-300'
-                  }`}>
-                    {signal.indicators.bollinger}
-                  </span>
-                </div>
-                <div className="text-xs">
-                  <span className="text-gray-400">Volume:</span>
-                  <span className={`ml-1 capitalize ${
-                    signal.indicators.volume === 'high' ? 'text-green-400' :
-                    signal.indicators.volume === 'normal' ? 'text-gray-300' : 'text-red-400'
-                  }`}>
-                    {signal.indicators.volume}
-                  </span>
-                </div>
-              </div>
-
-              {/* Price Action Analysis */}
-              <div className="flex items-center justify-between text-sm border-t border-gray-700 pt-3">
-                <div className="flex space-x-4">
-                  <span className="text-gray-400">
-                    Entry: <span className="text-white font-mono">{signal.entry.toFixed(4)}</span>
-                  </span>
-                  <span className="text-gray-400">
-                    Expiry: <span className="text-white">{signal.expiry}</span>
-                  </span>
-                  <span className="text-gray-400">
-                    Trend: <span className={`capitalize ${
-                      signal.priceAction.trend === 'uptrend' ? 'text-green-400' :
-                      signal.priceAction.trend === 'downtrend' ? 'text-red-400' : 'text-gray-300'
+                
+                {/* Technical Indicators Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600">
+                    <div className="text-xs text-gray-400 mb-1">RSI</div>
+                    <div className={`text-lg font-bold ${
+                      signal.indicators.rsi < 30 ? 'text-green-400' : 
+                      signal.indicators.rsi > 70 ? 'text-red-400' : 'text-gray-300'
                     }`}>
-                      {signal.priceAction.trend}
-                    </span>
-                  </span>
+                      {signal.indicators.rsi}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600">
+                    <div className="text-xs text-gray-400 mb-1">MACD</div>
+                    <div className={`text-sm font-medium capitalize ${
+                      signal.indicators.macd === 'bullish' ? 'text-green-400' :
+                      signal.indicators.macd === 'bearish' ? 'text-red-400' : 'text-gray-300'
+                    }`}>
+                      {signal.indicators.macd}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600">
+                    <div className="text-xs text-gray-400 mb-1">Bollinger</div>
+                    <div className={`text-sm font-medium capitalize ${
+                      signal.indicators.bollinger === 'squeeze' ? 'text-yellow-400' :
+                      signal.indicators.bollinger === 'expansion' ? 'text-blue-400' : 'text-gray-300'
+                    }`}>
+                      {signal.indicators.bollinger}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600">
+                    <div className="text-xs text-gray-400 mb-1">Volume</div>
+                    <div className={`text-sm font-medium capitalize ${
+                      signal.indicators.volume === 'high' ? 'text-green-400' :
+                      signal.indicators.volume === 'normal' ? 'text-gray-300' : 'text-red-400'
+                    }`}>
+                      {signal.indicators.volume}
+                    </div>
+                  </div>
                 </div>
-                <span className="text-gray-400">
-                  {new Date(signal.timestamp).toLocaleTimeString()}
-                </span>
+
+                {/* Signal Footer */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-600">
+                  <div className="flex items-center space-x-6 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-gray-400">Entry:</span>
+                      <span className="text-white font-mono">{signal.entry.toFixed(4)}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-gray-400">Expiry:</span>
+                      <span className="text-white font-medium">{signal.expiry}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-gray-400">Trend:</span>
+                      <span className={`capitalize font-medium ${
+                        signal.priceAction.trend === 'uptrend' ? 'text-green-400' :
+                        signal.priceAction.trend === 'downtrend' ? 'text-red-400' : 'text-gray-300'
+                      }`}>
+                        {signal.priceAction.trend}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(signal.timestamp).toLocaleTimeString()}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </div>

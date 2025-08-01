@@ -27,7 +27,7 @@ class DerivAPI {
     }
 
     this.connectionPromise = new Promise<void>((resolve, reject) => {
-      this.ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089');
+      this.ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=3738');
       
       this.ws.onopen = () => {
         this.connectionPromise = null;
@@ -49,17 +49,12 @@ class DerivAPI {
           callback?.(data);
           this.callbacks.delete(data.req_id);
         }
-        
-        // Handle subscription confirmations
-        if (data.msg_type === 'tick' && data.tick) {
-          this.tickCallback?.(data);
-        }
       };
 
       this.ws.onclose = () => {
         this.connectionPromise = null;
         this.connectionCallback?.(false);
-        console.log('WebSocket closed');
+        console.log('WebSocket closed:', event.code, event.reason);
         
         // Auto-reconnect with exponential backoff
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -80,7 +75,7 @@ class DerivAPI {
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         this.connectionPromise = null;
-        reject(new Error('WebSocket connection failed'));
+        // Don't reject immediately, let the close handler manage reconnection
       };
     });
 

@@ -409,10 +409,6 @@ class DerivAPI {
     });
   }
 
-  async getPortfolio(): Promise<any> {
-    return this.sendRequest({ portfolio: 1 });
-  }
-
   disconnect(): void {
     // Clear all pending callbacks
     this.requestCallbacks.forEach(callback => {

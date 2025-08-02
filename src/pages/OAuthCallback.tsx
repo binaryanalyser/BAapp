@@ -5,7 +5,7 @@ import { BarChart3 } from 'lucide-react';
 
 const OAuthCallback: React.FC = () => {
   const location = useLocation();
-  const { loginWithOAuth, login } = useAuth();
+  const { handleTokenLogin } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -134,7 +134,7 @@ const OAuthCallback: React.FC = () => {
 
         if (token) {
           console.log('Token received, attempting login... Token preview:', token.substring(0, 15) + '...');
-          await loginWithOAuth(token); // This is OAuth login
+          await handleTokenLogin(token, 'oauth'); // This is OAuth login
           console.log('Login successful, redirecting...');
           
           // Redirect to the original URL or dashboard
@@ -155,7 +155,7 @@ const OAuthCallback: React.FC = () => {
     // Add a small delay to ensure the URL is fully loaded
     const timer = setTimeout(handleOAuthCallback, 500);
     return () => clearTimeout(timer);
-  }, [location, loginWithOAuth, navigate]);
+  }, [location, handleTokenLogin, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">

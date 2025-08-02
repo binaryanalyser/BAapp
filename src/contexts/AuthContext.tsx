@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { derivAPI } from '../services/derivAPI';
 
 interface User {
@@ -60,7 +59,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(false);
   const [accountList, setAccountList] = useState<AccountListItem[] | null>(null);
   const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
-  const navigate = useNavigate();
 
   const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
     try {
@@ -158,8 +156,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('deriv_token');
     localStorage.removeItem('deriv_login_method');
     derivAPI.disconnect();
-    navigate('/login');
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('deriv_token');

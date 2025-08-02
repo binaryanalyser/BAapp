@@ -198,19 +198,11 @@ class DerivAPI {
 
   private sendRequest(request: any, timeout: number = 30000): Promise<any> {
     return new Promise((resolve, reject) => {
-      if (!this.ws) {
-        reject(new Error('WebSocket is not initialized'));
-        return;
-      }
-
-      // Wait for connection to be ready before sending
-      if (!this.isConnected || this.ws.readyState !== WebSocket.OPEN) {
+      if (!this.isConnected || !this.ws) {
         // Try to reconnect if not connected
         this.connect().then(() => {
-          // Wait for connection to be fully open
-          this.waitForConnection().then(() => {
-            this.sendRequestInternal(request, timeout, resolve, reject);
-          }).catch(reject);
+          // Retry the request after reconnection
+          this.sendRequestInternal(request, timeout, resolve, reject);
         }).catch(error => {
           reject(new Error('WebSocket is not connected and reconnection failed: ' + error.message));
         });
@@ -221,34 +213,7 @@ class DerivAPI {
     });
   }
 
-  private waitForConnection(maxWait: number = 5000): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        resolve();
-        return;
-      }
-
-      const startTime = Date.now();
-      const checkConnection = () => {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          resolve();
-        } else if (Date.now() - startTime > maxWait) {
-          reject(new Error('Connection timeout'));
-        } else {
-          setTimeout(checkConnection, 100);
-        }
-      };
-      
-      checkConnection();
-    });
-  }
-
   private sendRequestInternal(request: any, timeout: number, resolve: Function, reject: Function): void {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket is not ready'));
-        return;
-      }
-
       const reqId = this.requestId++;
       request.req_id = reqId;
 
@@ -258,14 +223,7 @@ class DerivAPI {
       }, timeout);
 
       this.requestCallbacks.set(reqId, { resolve, reject, timeout: timeoutHandle });
-      
-      try {
-        this.ws.send(JSON.stringify(request));
-      } catch (error) {
-        this.requestCallbacks.delete(reqId);
-        clearTimeout(timeoutHandle);
-        reject(error);
-      }
+      this.ws.send(JSON.stringify(request));
   }
 
   async authorize(token: string): Promise<AuthResponse> {

@@ -252,7 +252,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     loginWithOAuth,
     logout,
-    updateBalance,
+    updateBalances,
     switchAccount
   };
 

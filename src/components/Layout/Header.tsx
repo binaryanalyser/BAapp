@@ -73,8 +73,17 @@ const Header: React.FC = () => {
 
   // Get display balance for an account
   const getAccountBalance = (account: any) => {
-    // Use the most recent balance from our local state, fallback to account data
-    return accountBalances[account.loginid] ?? account.balance ?? 0;
+    // Priority: local balance state > account data > 0
+    const localBalance = accountBalances[account.loginid];
+    const accountBalance = account.balance;
+    
+    // Use local balance if available and different from account balance (more recent)
+    if (localBalance !== undefined) {
+      return localBalance;
+    }
+    
+    // Fallback to account balance or 0
+    return accountBalance ?? 0;
   };
 
   // Format balance for display
@@ -173,9 +182,9 @@ const Header: React.FC = () => {
                                   {isCurrentAccount && (
                                     <div className="text-xs text-green-400 mt-1">Current</div>
                                   )}
-                                  {!isCurrentAccount && accountBalance !== (account.balance || 0) && (
-                                    <div className="text-xs text-yellow-400 mt-1">Updated</div>
-                                  )}
+                                  <div className="text-xs text-gray-400 mt-1">
+                                    {account.is_virtual ? 'Demo' : 'Real'}
+                                  </div>
                                 </div>
                               </div>
                             </button>

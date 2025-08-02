@@ -64,6 +64,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     derivAPI.connect().catch(console.error);
   }, []);
 
+  // Fetch balances for all accounts when account list is available
+  useEffect(() => {
+    const fetchAccountBalances = async () => {
+      if (accountList && accountList.length > 1 && loginMethod === 'oauth') {
+        console.log('Fetching balances for all accounts...');
+        
+        // Update balances from the account list data
+        const balances: Record<string, number> = {};
+        accountList.forEach(account => {
+          balances[account.loginid] = account.balance || 0;
+        });
+        setAccountBalances(balances);
+        
+        // Try to get fresh balance for current account
+        if (user && isAuthenticated) {
+          try {
+            const balanceResponse = await derivAPI.getBalance();
+            if (balanceResponse.balance) {
+              const freshBalance = balanceResponse.balance.balance;
+              setAccountBalances(prev => ({
+                ...prev,
+                [user.loginid]: freshBalance
+              }));
+              updateBalance(freshBalance);
+            }
+          } catch (error) {
+            console.warn('Failed to fetch current account balance:', error);
+          }
+        }
+      }
+    };
+
+    fetchAccountBalances();
+  }, [accountList, user?.loginid, isAuthenticated, loginMethod]);
   // Check for saved token on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('deriv_token');
@@ -177,7 +211,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       console.log('Switching to account:', loginid);
       
-      // Method 1: Try authorize with loginid parameter
+      // Try authorize with loginid parameter to switch account
       try {
         const response = await derivAPI.sendRequest({ 
           authorize: token,
@@ -211,6 +245,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               landing_company_name: account.landing_company_name
             }));
             setAccountList(updatedAccounts);
+            
+            // Update local balance tracking
+            setAccountBalances(prev => {
+              const newBalances = { ...prev };
+              updatedAccounts.forEach(acc => {
+                newBalances[acc.loginid] = acc.balance || 0;
+              });
+              return newBalances;
+            });
           }
           
           console.log('Successfully switched to account via authorize:', loginid);
@@ -220,7 +263,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('Authorize with loginid failed:', authorizeError);
       }
       
-      // Method 2: Manual account selection from stored account list
+      // Fallback: Manual account selection from stored account list
       if (accountList) {
         const targetAccount = accountList.find(acc => acc.loginid === loginid);
         if (targetAccount) {
@@ -241,16 +284,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           try {
             const balanceResponse = await derivAPI.getBalance();
             if (balanceResponse.balance) {
-              updateBalance(balanceResponse.balance.balance);
+              const freshBalance = balanceResponse.balance.balance;
+              updateBalance(freshBalance);
               
               // Update the account list with the fresh balance
               setAccountList(prevList => 
                 prevList ? prevList.map(acc => 
                   acc.loginid === loginid 
-                    ? { ...acc, balance: balanceResponse.balance.balance }
+                    ? { ...acc, balance: freshBalance }
                     : acc
                 ) : prevList
               );
+              
+              // Update local balance tracking
+              setAccountBalances(prev => ({
+                ...prev,
+                [loginid]: freshBalance
+              }));
             }
           } catch (balanceError) {
             console.warn('Failed to get balance after local switch:', balanceError);

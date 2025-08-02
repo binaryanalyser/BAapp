@@ -45,7 +45,6 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center space-x-3 mb-2">
             <User className="h-8 w-8 text-blue-400" />
           </div>
-          <p className="text-gray-400">Real-time market analysis and live tick data</p>
         </div>
 
         {/* Live Ticks */}

@@ -88,7 +88,7 @@ const Header: React.FC = () => {
           {/* Logo */}
           <div className="flex items-center">
             <Link to="/" className="flex items-center space-x-2">
-              <BarChart3 className="h-8 w-8 text-blue-500" />
+              <img src="/logo_ba.png" alt="Binary Analyzer" className="h-8 w-8" />
               <span className="text-xl font-bold text-white">Binary Analyzer</span>
             </Link>
           </div>

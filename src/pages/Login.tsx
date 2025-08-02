@@ -28,7 +28,7 @@ const Login: React.FC = () => {
     const redirectUri = 'https://dashing-sopapillas-01c6cc.netlify.app/oauth-callback';
     
     // Try multiple OAuth configurations
-    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&l=EN&brand=deriv&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=read,trade`;
+    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=89440&l=EN&brand=deriv&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=read,trade`;
     
     console.log('OAuth Redirect URI:', redirectUri);
     console.log('Full OAuth URL:', authUrl);

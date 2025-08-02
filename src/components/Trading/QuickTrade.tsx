@@ -413,7 +413,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
         {!user && (
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">
             <AlertCircle className="h-4 w-4" />
-            <span>Please log in to place trades</span>
+            <span>Please log in to placce trades</span>
           </div>
         )}
 

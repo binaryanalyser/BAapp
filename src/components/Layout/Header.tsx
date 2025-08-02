@@ -1,15 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, User, LogOut, Menu, X, ChevronDown, RefreshCw } from 'lucide-react';
+import {
+  BarChart3, User, LogOut, Menu, X, ChevronDown, RefreshCw,
+} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header: React.FC = () => {
-  const { user, isAuthenticated, logout, accountList, switchAccount, isLoading, loginMethod, accountBalances } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    logout,
+    accountList,
+    switchAccount,
+    isLoading,
+    loginMethod,
+    accountBalances,
+  } = useAuth();
+
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
-
 
   const navigation = [
     { name: 'Analysis', href: '/', icon: BarChart3 },
@@ -37,7 +48,6 @@ const Header: React.FC = () => {
     }
   };
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -45,26 +55,21 @@ const Header: React.FC = () => {
         setIsAccountDropdownOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Get display balance for an account
   const getAccountBalance = (account: any): number => {
-    // First try to get balance from accountBalances (most up-to-date)
     if (accountBalances && accountBalances[account.loginid] !== undefined) {
       return accountBalances[account.loginid];
     }
-    
-    // Fallback to account's stored balance
     return account.balance ?? 0;
   };
 
-  // Format balance for display
   const formatBalance = (balance: number, currency: string) => {
     return `${balance.toFixed(2)} ${currency}`;
   };
+
   return (
     <header className="fixed top-0 w-full bg-gray-800 border-b border-gray-700 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -97,7 +102,7 @@ const Header: React.FC = () => {
           <div className="flex items-center space-x-4">
             {isAuthenticated && user ? (
               <div className="flex items-center space-x-2">
-                {/* Account Switcher - Only show for OAuth logins */}
+                {/* Account Switcher */}
                 {loginMethod === 'oauth' && accountList && accountList.length > 1 && (
                   <div className="relative account-dropdown">
                     <button
@@ -129,39 +134,39 @@ const Header: React.FC = () => {
                             const isCurrentAccount = account.loginid === user.loginid;
                             const balanceDisplay = formatBalance(accountBalance, account.currency);
                             return (
-                            <button
-                              key={account.loginid}
-                              onClick={() => handleAccountSwitch(account.loginid)}
-                              disabled={isSwitching}
-                              className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                                isCurrentAccount
-                                  ? 'bg-blue-600 text-white'
-                                  : 'hover:bg-gray-700 text-gray-300'
-                              } ${isSwitching ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <div className="text-sm font-medium">{account.loginid}</div>
-                                  <div className="text-xs text-gray-400">
-                                    {account.is_virtual ? 'Demo Account' : 'Real Account'}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-sm font-mono font-bold">
-                                    {balanceDisplay}
-                                  </div>
-                                  {isCurrentAccount && (
-                                    <div className="text-xs bg-green-500 text-white px-2 py-1 rounded mt-1">
-                                      ACTIVE
+                              <button
+                                key={account.loginid}
+                                onClick={() => handleAccountSwitch(account.loginid)}
+                                disabled={isSwitching}
+                                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                                  isCurrentAccount
+                                    ? 'bg-blue-600 text-white'
+                                    : 'hover:bg-gray-700 text-gray-300'
+                                } ${isSwitching ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <div className="text-sm font-medium">{account.loginid}</div>
+                                    <div className="text-xs text-gray-400">
+                                      {account.is_virtual ? 'Demo Account' : 'Real Account'}
                                     </div>
-                                  )}
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-sm font-mono font-bold">
+                                      {balanceDisplay}
+                                    </div>
+                                    {isCurrentAccount && (
+                                      <div className="text-xs bg-green-500 text-white px-2 py-1 rounded mt-1">
+                                        ACTIVE
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            </button>
+                              </button>
                             );
                           })}
-                          
-                          {/* Account Summary */}
+
+                          {/* Summary */}
                           <div className="mt-2 pt-2 border-t border-gray-600">
                             <div className="px-3 py-2 text-xs text-gray-400">
                               <div className="flex justify-between items-center mb-2">
@@ -213,7 +218,7 @@ const Header: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Logout Button */}
+                {/* Logout */}
                 <button
                   onClick={logout}
                   className="p-2 text-gray-400 hover:text-white transition-colors"
@@ -232,7 +237,7 @@ const Header: React.FC = () => {
               </Link>
             )}
 
-            {/* Mobile menu button */}
+            {/* Mobile Menu */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="md:hidden p-2 text-gray-400 hover:text-white transition-colors"

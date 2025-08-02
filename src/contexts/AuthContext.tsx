@@ -161,41 +161,112 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       console.log('Switching to account:', loginid);
       
-      // Call Deriv API to switch account
-      const response = await derivAPI.switchAccount(loginid);
-      
-      if (response.authorize) {
-        // Update user data with the new account
-        const userData: User = {
-          loginid: response.authorize.loginid,
-          email: response.authorize.email,
-          fullname: response.authorize.fullname,
-          currency: response.authorize.currency,
-          balance: response.authorize.balance,
-          is_virtual: response.authorize.is_virtual,
-          country: response.authorize.country
-        };
+      // Method 1: Try using 'switch' request
+      try {
+        const switchResponse = await derivAPI.sendRequest({
+          switch: loginid
+        });
         
-        setUser(userData);
-        console.log('Successfully switched to account:', loginid);
-        
-        // Get updated balance for the new account
-        try {
-          const balanceResponse = await derivAPI.getBalance();
-          if (balanceResponse.balance) {
-            updateBalance(balanceResponse.balance.balance);
+        if (switchResponse.switch) {
+          console.log('Switch successful, re-authorizing...');
+          // Re-authorize to get updated account info
+          const authResponse = await derivAPI.authorize(token);
+          
+          if (authResponse.authorize) {
+            const userData: User = {
+              loginid: authResponse.authorize.loginid,
+              email: authResponse.authorize.email,
+              fullname: authResponse.authorize.fullname,
+              currency: authResponse.authorize.currency,
+              balance: authResponse.authorize.balance,
+              is_virtual: authResponse.authorize.is_virtual,
+              country: authResponse.authorize.country
+            };
+            
+            setUser(userData);
+            console.log('Successfully switched to account:', loginid);
+            return; // Success, exit early
           }
-        } catch (balanceError) {
-          console.warn('Failed to get balance after account switch:', balanceError);
         }
-      } else {
-        throw new Error('Failed to switch account');
+      } catch (switchError) {
+        console.log('Switch method failed, trying authorize with loginid...', switchError);
       }
+      
+      // Method 2: Try authorize with loginid parameter
+      try {
+        const response = await derivAPI.sendRequest({ 
+          authorize: token,
+          loginid: loginid
+        });
+        
+        if (response.authorize) {
+          const userData: User = {
+            loginid: response.authorize.loginid,
+            email: response.authorize.email,
+            fullname: response.authorize.fullname,
+            currency: response.authorize.currency,
+            balance: response.authorize.balance,
+            is_virtual: response.authorize.is_virtual,
+            country: response.authorize.country
+          };
+          
+          setUser(userData);
+          console.log('Successfully switched to account via authorize:', loginid);
+          return; // Success, exit early
+        }
+      } catch (authorizeError) {
+        console.log('Authorize with loginid failed:', authorizeError);
+      }
+      
+      // Method 3: Manual account selection from stored account list
+      if (accountList) {
+        const targetAccount = accountList.find(acc => acc.loginid === loginid);
+        if (targetAccount) {
+          const userData: User = {
+            loginid: targetAccount.loginid,
+            email: targetAccount.email || user?.email || '',
+            fullname: user?.fullname || '',
+            currency: targetAccount.currency,
+            balance: targetAccount.balance || 0,
+            is_virtual: targetAccount.is_virtual,
+            country: user?.country || ''
+          };
+          
+          setUser(userData);
+          console.log('Switched to account via local data:', loginid);
+          
+          // Try to get fresh balance
+          try {
+            const balanceResponse = await derivAPI.getBalance();
+            if (balanceResponse.balance) {
+              updateBalance(balanceResponse.balance.balance);
+            }
+          } catch (balanceError) {
+            console.warn('Failed to get balance after local switch:', balanceError);
+          }
+          return; // Success
+        }
+      }
+      
+      throw new Error('All account switch methods failed');
+      
     } catch (error) {
       console.error('Account switch failed:', error);
       throw error;
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Get updated balance for the new account
+  const getUpdatedBalance = async () => {
+    try {
+      const balanceResponse = await derivAPI.getBalance();
+      if (balanceResponse.balance) {
+        updateBalance(balanceResponse.balance.balance);
+      }
+    } catch (balanceError) {
+      console.warn('Failed to get balance after account switch:', balanceError);
     }
   };
 

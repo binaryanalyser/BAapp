@@ -198,8 +198,8 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     else if (confidence >= 65) strength = 'MEDIUM';
     else strength = 'LOW';
     
-    // Only return signals with reasonable confidence
-    if (confidence < 60) return null;
+    // Only return signals with reasonable confidence (lowered threshold for better signal generation)
+    if (confidence < 55) return null;
     
     // Calculate price change
     const previousPrice = priceHistory[priceHistory.length - 2] || currentPrice;
@@ -260,7 +260,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     setIsAnalyzing(true);
     
     setTimeout(() => {
-      const newSignals: AssetSignal[] = [];
+      const candidateSignals: AssetSignal[] = [];
       
       assetsToAnalyze.forEach(asset => {
         const tickData = ticks[asset.symbol];
@@ -269,15 +269,31 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
         if (tickData && priceHistory.length >= 30) {
           const signal = generateAssetSignal(asset, tickData.price, priceHistory);
           if (signal) {
-            newSignals.push(signal);
+            candidateSignals.push(signal);
           }
         }
       });
       
-      // Sort by confidence (highest first)
-      newSignals.sort((a, b) => b.confidence - a.confidence);
+      // Find the single highest probability signal
+      let bestSignal: AssetSignal | null = null;
       
-      setSignals(newSignals);
+      if (candidateSignals.length > 0) {
+        // Sort by confidence and strength priority
+        candidateSignals.sort((a, b) => {
+          // First priority: strength (CRITICAL > HIGH > MEDIUM > LOW)
+          const strengthOrder = { 'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+          const strengthDiff = strengthOrder[b.strength] - strengthOrder[a.strength];
+          if (strengthDiff !== 0) return strengthDiff;
+          
+          // Second priority: confidence
+          return b.confidence - a.confidence;
+        });
+        
+        bestSignal = candidateSignals[0];
+      }
+      
+      // Set only the best signal, or empty array if none found
+      setSignals(bestSignal ? [bestSignal] : []);
       setLastAnalysisTime(Date.now());
       setIsAnalyzing(false);
     }, 2000); // 2 second analysis simulation
@@ -439,9 +455,22 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-6">
-              <h4 className="text-lg font-semibold text-white">High-Accuracy Trading Signals</h4>
+              <h4 className="text-lg font-semibold text-white">Highest Probability Signal</h4>
               <div className="text-sm text-gray-400">
                 Last updated: {new Date(lastAnalysisTime).toLocaleTimeString()}
+              </div>
+            </div>
+            
+            {/* Analysis Summary */}
+            <div className="bg-gray-750 rounded-lg p-4 border border-gray-600 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Brain className="h-5 w-5 text-purple-400" />
+                  <span className="text-white font-medium">Multi-Asset Analysis Complete</span>
+                </div>
+                <div className="text-sm text-gray-400">
+                  Analyzed {assetsToAnalyze.length} assets • Showing top signal
+                </div>
               </div>
             </div>
             
@@ -452,6 +481,13 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
                   signal.strength === 'CRITICAL' ? 'ring-2 ring-red-400/50 animate-pulse' : ''
                 }`}
               >
+                {/* Best Signal Badge */}
+                <div className="absolute top-4 right-4">
+                  <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                    🏆 BEST SIGNAL
+                  </div>
+                </div>
+                
                 {/* Signal Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-4">
@@ -477,6 +513,9 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
                       </div>
                       <p className="text-gray-400 text-sm mb-1">{signal.displayName}</p>
                       <p className="text-gray-300 text-sm leading-relaxed max-w-md">{signal.reasoning}</p>
+                      <div className="mt-2 text-xs text-yellow-400 font-medium">
+                        Selected from {assetsToAnalyze.length} analyzed assets
+                      </div>
                     </div>
                   </div>
                   

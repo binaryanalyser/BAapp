@@ -311,7 +311,13 @@ class DerivAPI {
 
   async switchAccount(loginid: string): Promise<any> {
     return this.sendRequest({ 
-      authorize: this.getStoredToken(),
+      loginid: loginid
+    });
+  }
+
+  async authorizeWithLoginid(loginid: string): Promise<any> {
+    return this.sendRequest({ 
+      authorize: this.getStoredToken(), 
       loginid: loginid 
     });
   }

@@ -70,23 +70,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (accountList && accountList.length > 1 && loginMethod === 'oauth') {
         console.log('Fetching balances for all accounts...');
         
-        // Update balances from the account list data
-        const balances: Record<string, number> = {};
-        accountList.forEach(account => {
-          balances[account.loginid] = account.balance || 0;
-        });
-        setAccountBalances(balances);
-        
         // Try to get fresh balance for current account
         if (user && isAuthenticated) {
           try {
             const balanceResponse = await derivAPI.getBalance();
             if (balanceResponse.balance) {
               const freshBalance = balanceResponse.balance.balance;
-              setAccountBalances(prev => ({
-                ...prev,
-                [user.loginid]: freshBalance
-              }));
               updateBalance(freshBalance);
             }
           } catch (error) {

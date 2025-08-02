@@ -303,37 +303,26 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     }
 
     try {
+      console.log('Switching to account:', loginid);
       console.log('Selling trade with contract ID:', contractId);
       const response = await derivAPI.sellContract(parseInt(contractId));
-      console.log('Sell response:', response);
+      console.log('Switch account response:', response);
       
-      if (response.sell) {
-        // Update the trade status locally
-        setTrades(prevTrades => prevTrades.map(trade => {
-          if (trade.contractId === contractId) {
-            const profit = response.sell.sold_for - trade.stake;
-            return {
-              ...trade,
-              status: profit > 0 ? 'won' : 'lost' as const,
-              exitTime: Date.now(),
-              exitPrice: response.sell.sold_for,
-              payout: response.sell.sold_for,
-              profit: profit
-            };
-          }
-          return trade;
-        }));
-
-        console.log('✅ Trade sold successfully:', response.sell);
+      if (response.authorize) {
+        console.log('✅ Account switched successfully to:', loginid);
         
-        // Refresh open trades after selling
-        setTimeout(() => loadOpenTrades(), 1000);
-        return response.sell;
+        // Load trading data for the new account
+        await Promise.all([
+          loadTradingHistory(),
+          loadOpenTrades()
+        ]);
+        
+        return response.authorize;
       } else {
-        throw new Error('Failed to sell contract');
+        throw new Error('Failed to switch account');
       }
     } catch (error) {
-      console.error('Failed to sell trade:', error);
+      console.error('Failed to switch account:', error);
       throw error;
     }
   };

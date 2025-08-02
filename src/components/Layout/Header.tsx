@@ -4,7 +4,7 @@ import { BarChart3, User, LogOut, Menu, X, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header: React.FC = () => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, accountList } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -17,6 +17,20 @@ const Header: React.FC = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Format balance for display
+  const formatBalance = (balance: number) => {
+    if (balance >= 1000000) {
+      return `${(balance / 1000000).toFixed(1)}M`;
+    } else if (balance >= 1000) {
+      return `${(balance / 1000).toFixed(1)}K`;
+    }
+    return balance.toFixed(2);
+  };
+
+  // Get account type display
+  const getAccountTypeDisplay = (isVirtual: number) => {
+    return isVirtual === 1 ? 'Demo' : 'Real';
+  };
   return (
     <header className="fixed top-0 w-full bg-gray-800 border-b border-gray-700 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -61,6 +75,24 @@ const Header: React.FC = () => {
 
             {isAuthenticated && user ? (
               <div className="flex items-center space-x-4">
+                {/* Account Balance Display */}
+                <div className="hidden md:flex items-center space-x-3 bg-gray-700 rounded-lg px-4 py-2 border border-gray-600">
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-white">
+                      {formatBalance(user.balance)} {user.currency}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {user.loginid} • {getAccountTypeDisplay(user.is_virtual)}
+                      {accountList && accountList.length > 1 && (
+                        <span className="ml-1">({accountList.length} accounts)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`w-2 h-2 rounded-full ${
+                    user.is_virtual === 1 ? 'bg-yellow-400' : 'bg-green-400'
+                  } animate-pulse`}></div>
+                </div>
+
                 <button
                   onClick={logout}
                   className="p-2 text-gray-400 hover:text-white transition-colors"
@@ -97,6 +129,23 @@ const Header: React.FC = () => {
         {isMobileMenuOpen && (
           <div className="md:hidden bg-gray-800 border-t border-gray-700">
             <div className="px-2 pt-2 pb-3 space-y-1">
+              {/* Mobile Account Balance */}
+              {isAuthenticated && user && (
+                <div className="flex items-center justify-between bg-gray-700 rounded-lg px-3 py-3 mb-3 border border-gray-600">
+                  <div>
+                    <div className="text-sm font-medium text-white">
+                      {formatBalance(user.balance)} {user.currency}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {user.loginid} • {getAccountTypeDisplay(user.is_virtual)}
+                    </div>
+                  </div>
+                  <div className={`w-2 h-2 rounded-full ${
+                    user.is_virtual === 1 ? 'bg-yellow-400' : 'bg-green-400'
+                  } animate-pulse`}></div>
+                </div>
+              )}
+              
               {/* Mobile Go to Deriv Button */}
               <a
                 href="https://track.deriv.be/_Yqc93056kqA5TVC3w-F7AGNd7ZgqdRLk/1/"

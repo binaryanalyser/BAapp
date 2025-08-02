@@ -770,12 +770,12 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol = 'R_10' }
     const strongSignals = indicators.filter(i => i.strength === 'STRONG');
     
     // Calculate weighted confidence based on indicator strength and confidence
-    const buyConfidence = buySignals.reduce((sum, ind) => {
+    let buyConfidence = buySignals.reduce((sum, ind) => {
       const strengthWeight = ind.strength === 'STRONG' ? 1.5 : ind.strength === 'MODERATE' ? 1.2 : 1;
       return sum + (ind.confidence * strengthWeight);
     }, 0) / Math.max(buySignals.length, 1);
     
-    const sellConfidence = sellSignals.reduce((sum, ind) => {
+    let sellConfidence = sellSignals.reduce((sum, ind) => {
       const strengthWeight = ind.strength === 'STRONG' ? 1.5 : ind.strength === 'MODERATE' ? 1.2 : 1;
       return sum + (ind.confidence * strengthWeight);
     }, 0) / Math.max(sellSignals.length, 1);

@@ -377,18 +377,11 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
             disabled={!user || !currentPrice || isLoadingProposal}
             className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25"
           >
-            {isLoadingProposal ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span className="text-sm">Loading...</span>
-              </>
-            ) : (
-              <>
-                <TrendingUp className="h-8 w-8 animate-bounce" />
-                <span className="text-lg">Trade Higher</span>
-                <Zap className="h-4 w-4 animate-pulse" />
-              </>
-            )}
+            <>
+              <TrendingUp className="h-8 w-8 animate-bounce" />
+              <span className="text-lg">Trade Higher</span>
+              <Zap className="h-4 w-4 animate-pulse" />
+            </>
           </button>
 
           {/* Trade Lower Button */}
@@ -397,18 +390,11 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
             disabled={!user || !currentPrice || isLoadingProposal}
             className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25"
           >
-            {isLoadingProposal ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span className="text-sm">Loading...</span>
-              </>
-            ) : (
-              <>
-                <TrendingDown className="h-8 w-8 animate-bounce" />
-                <span className="text-lg">Trade Lower</span>
-                <Zap className="h-4 w-4 animate-pulse" />
-              </>
-            )}
+            <>
+              <TrendingDown className="h-8 w-8 animate-bounce" />
+              <span className="text-lg">Trade Lower</span>
+              <Zap className="h-4 w-4 animate-pulse" />
+            </>
           </button>
         </div>
 

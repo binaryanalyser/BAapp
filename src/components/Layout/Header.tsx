@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, User, LogOut, Menu, X } from 'lucide-react';
+import { BarChart3, User, LogOut, Menu, X, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header: React.FC = () => {
@@ -48,6 +48,17 @@ const Header: React.FC = () => {
 
           {/* User Menu */}
           <div className="flex items-center space-x-4">
+            {/* Go to Deriv Button */}
+            <a
+              href="https://track.deriv.be/_Yqc93056kqA5TVC3w-F7AGNd7ZgqdRLk/1/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden md:flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+            >
+              <span>Go to Deriv</span>
+              <ExternalLink className="h-4 w-4" />
+            </a>
+
             {isAuthenticated && user ? (
               <div className="flex items-center space-x-4">
                 <div className="text-right">
@@ -92,6 +103,18 @@ const Header: React.FC = () => {
         {isMobileMenuOpen && (
           <div className="md:hidden bg-gray-800 border-t border-gray-700">
             <div className="px-2 pt-2 pb-3 space-y-1">
+              {/* Mobile Go to Deriv Button */}
+              <a
+                href="https://track.deriv.be/_Yqc93056kqA5TVC3w-F7AGNd7ZgqdRLk/1/"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+              >
+                <span>Go to Deriv</span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+              
               {navigation.map((item) => (
                 <Link
                   key={item.name}

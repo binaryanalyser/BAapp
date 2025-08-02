@@ -293,7 +293,15 @@ class DerivAPI {
   }
 
   async switchAccount(loginid: string): Promise<any> {
-    return this.sendRequest({ switch_account: loginid });
+    return this.sendRequest({ 
+      authorize: this.getStoredToken(),
+      loginid: loginid 
+    });
+  }
+
+  private getStoredToken(): string {
+    // Get the token from localStorage or current session
+    return localStorage.getItem('deriv_token') || '';
   }
 
   async sellContract(contractId: number): Promise<any> {

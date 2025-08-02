@@ -66,8 +66,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     derivAPI.connect().catch(console.error);
   }, []);
+  const fetchAllBalances = async () => {
+  if (!token || !accountList) return;
+
+  const updatedBalances: Record<string, number> = {};
+
+  for (const account of accountList) {
+    try {
+      const res = await derivAPI.sendRequest({
+        authorize: token,
+        loginid: account.loginid
+      });
+      if (res.authorize) {
+        updatedBalances[account.loginid] = res.authorize.balance || 0;
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch balance for ${account.loginid}:`, err);
+    }
+  }
+
+  setAccountBalances(updatedBalances);
+};
+
 
   // Fetch balances for all accounts when account list is available
+  
   useEffect(() => {
     const savedToken = localStorage.getItem('deriv_token');
     const savedLoginMethod = localStorage.getItem('deriv_login_method') as 'oauth' | 'token' | null;

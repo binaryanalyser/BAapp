@@ -65,6 +65,7 @@ class DerivAPI {
   private isConnecting = false;
   private tickListeners: Array<(data: TickData) => void> = [];
   private connectionListeners: Array<(connected: boolean) => void> = [];
+  private balanceListeners: Array<(data: any) => void> = [];
   private subscriptions = new Map<string, string>(); // symbol -> subscription_id
   private readonly APP_ID = '88454';
   private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${this.APP_ID}`;
@@ -187,6 +188,12 @@ class DerivAPI {
       this.tickListeners.forEach(listener => listener(tickData));
     }
 
+    // Handle balance updates
+    if (data.balance) {
+      console.log('Balance update received:', data.balance);
+      this.balanceListeners.forEach(listener => listener(data.balance));
+    }
+
     // Handle subscription confirmation
     if (data.ticks_history || data.tick) {
       const symbol = data.echo_req?.ticks || data.tick?.symbol;
@@ -216,6 +223,9 @@ class DerivAPI {
   private sendRequestInternal(request: any, timeout: number, resolve: Function, reject: Function): void {
       const reqId = this.requestId++;
       request.req_id = reqId;
+      
+      // Log the request for debugging
+      console.log('Sending request:', { ...request, authorize: request.authorize ? '[TOKEN]' : undefined });
 
       const timeoutHandle = setTimeout(() => {
         this.requestCallbacks.delete(reqId);
@@ -228,10 +238,22 @@ class DerivAPI {
 
   async authorize(token: string): Promise<AuthResponse> {
     try {
+      console.log('Authorizing with APP_ID:', this.APP_ID);
       const response = await this.sendRequest({ authorize: token });
       if (response.error) {
         throw new Error(response.error.message || 'Authorization failed');
       }
+      
+      // Subscribe to balance updates after successful authorization
+      if (response.authorize) {
+        try {
+          await this.subscribeToBalance();
+          console.log('Subscribed to balance updates');
+        } catch (error) {
+          console.warn('Failed to subscribe to balance updates:', error);
+        }
+      }
+      
       return response;
     } catch (error) {
       console.error('Authorization request failed:', error);
@@ -240,13 +262,22 @@ class DerivAPI {
   }
 
   async getBalance(): Promise<BalanceResponse> {
+    return this.sendRequest({ balance: 1 });
+  }
+
+  async subscribeToBalance(): Promise<any> {
     return this.sendRequest({ balance: 1, subscribe: 1 });
   }
 
   async getAccountBalance(loginid?: string): Promise<any> {
     const request: any = { balance: 1 };
     if (loginid) {
-      request.loginid = loginid;
+      // For getting balance of specific account, we need to authorize with that loginid
+      const token = this.getStoredToken();
+      return this.sendRequest({
+        authorize: token,
+        loginid: loginid
+      });
     }
     return this.sendRequest(request);
   }
@@ -382,6 +413,11 @@ class DerivAPI {
     return this.sendRequest({ portfolio: 1 });
   }
 
+  // Generic method to send any request
+  async sendRequest(request: any, timeout: number = 30000): Promise<any> {
+    return this.sendRequest(request, timeout);
+  }
+
   disconnect(): void {
     // Clear all pending callbacks
     this.requestCallbacks.forEach(callback => {
@@ -407,6 +443,17 @@ class DerivAPI {
     const index = this.tickListeners.indexOf(callback);
     if (index > -1) {
       this.tickListeners.splice(index, 1);
+    }
+  }
+
+  onBalanceUpdate(callback: (data: any) => void): void {
+    this.balanceListeners.push(callback);
+  }
+
+  offBalanceUpdate(callback: (data: any) => void): void {
+    const index = this.balanceListeners.indexOf(callback);
+    if (index > -1) {
+      this.balanceListeners.splice(index, 1);
     }
   }
 

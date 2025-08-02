@@ -72,7 +72,160 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (accountList && accountList.length > 0 && loginMethod === 'oauth' && token) {
         console.log('Fetching balances for all accounts...');
         
-        const freshBalances: Record<string, number> = {};
+        try {
+          // Get balance for all accounts using the balance call
+          const balanceResponse = await derivAPI.sendRequest({
+            balance: 1,
+            account: 'all'
+          });
+          
+          const freshBalances: Record<string, number> = {};
+          
+          if (balanceResponse.balance) {
+            // Handle single account balance response
+            if (balanceResponse.balance.loginid) {
+              freshBalances[balanceResponse.balance.loginid] = balanceResponse.balance.balance;
+            }
+          }
+          
+          // For OAuth, we need to get balances for each account individually
+          for (const account of accountList) {
+            try {
+              console.log(`Fetching balance for account: ${account.loginid}`);
+              
+              // Switch to account and get balance
+              const accountResponse = await derivAPI.sendRequest({
+                authorize: token,
+                loginid: account.loginid
+              });
+              
+              if (accountResponse.authorize && accountResponse.authorize.balance !== undefined) {
+                freshBalances[account.loginid] = accountResponse.authorize.balance;
+                console.log(`Balance for ${account.loginid}: ${accountResponse.authorize.balance} ${account.currency}`);
+              } else {
+                // Fallback to account list balance
+                freshBalances[account.loginid] = account.balance || 0;
+                console.warn(`Could not fetch fresh balance for ${account.loginid}, using cached balance`);
+              }
+            } catch (error) {
+              console.warn(`Failed to fetch balance for account ${account.loginid}:`, error);
+              // Use the balance from account list as fallback
+              freshBalances[account.loginid] = account.balance || 0;
+            }
+          }
+          
+          // Update all balances at once
+          setAccountBalances(freshBalances);
+          
+          // Update the account list with fresh balances
+          setAccountList(prevList => 
+            prevList ? prevList.map(acc => ({
+              ...acc,
+              balance: freshBalances[acc.loginid] || acc.balance || 0
+            })) : prevList
+          );
+          
+          // Update current user's balance if it's in the fresh balances
+          if (user && freshBalances[user.loginid] !== undefined) {
+            setUser(prevUser => prevUser ? {
+              ...prevUser,
+              balance: freshBalances[user.loginid]
+            } : prevUser);
+          }
+          
+          // Switch back to current user's account
+          if (user) {
+            try {
+              await derivAPI.sendRequest({
+                authorize: token,
+                loginid: user.loginid
+              });
+              console.log(`Switched back to current account: ${user.loginid}`);
+            } catch (error) {
+              console.warn('Failed to switch back to current account:', error);
+            }
+          }
+          
+          console.log('All account balances fetched:', freshBalances);
+        } catch (error) {
+          console.error('Failed to fetch account balances:', error);
+          // Initialize with account list balances as fallback
+          const fallbackBalances: Record<string, number> = {};
+          accountList.forEach(account => {
+            fallbackBalances[account.loginid] = account.balance || 0;
+          });
+          setAccountBalances(fallbackBalances);
+        }
+      }
+    };
+
+    // Only fetch balances when we have all required data and haven't fetched yet
+    if (accountList && loginMethod === 'oauth' && token && Object.keys(accountBalances).length === 0) {
+      fetchAccountBalances();
+    }
+  }, [accountList, loginMethod, token, accountBalances, user]);
+
+  // Subscribe to balance updates for current account
+  useEffect(() => {
+    const subscribeToBalance = async () => {
+      if (isAuthenticated && user && token) {
+        try {
+          console.log('Subscribing to balance updates for:', user.loginid);
+          await derivAPI.subscribeToBalance();
+        } catch (error) {
+          console.warn('Failed to subscribe to balance updates:', error);
+        }
+      }
+    };
+
+    subscribeToBalance();
+  }, [isAuthenticated, user, token]);
+
+  // Listen for balance updates
+  useEffect(() => {
+    const handleBalanceUpdate = (balanceData: any) => {
+      if (balanceData.loginid && user && balanceData.loginid === user.loginid) {
+        console.log('Balance update received:', balanceData);
+        updateBalance(balanceData.balance);
+      }
+    };
+
+    derivAPI.onBalanceUpdate(handleBalanceUpdate);
+
+    return () => {
+      derivAPI.offBalanceUpdate(handleBalanceUpdate);
+    };
+  }, [user]);
+
+  // Fetch trading history and portfolio when authenticated
+  useEffect(() => {
+    const fetchTradingData = async () => {
+      if (isAuthenticated && user && token && loginMethod === 'oauth') {
+        try {
+          console.log('Fetching trading data for OAuth user...');
+          
+          // Get portfolio (open positions)
+          const portfolioResponse = await derivAPI.getPortfolio();
+          console.log('Portfolio data:', portfolioResponse);
+          
+          // Get profit table (trading history)
+          const profitResponse = await derivAPI.getProfitTable({
+            limit: 50,
+            description: 1
+          });
+          console.log('Trading history:', profitResponse);
+          
+        } catch (error) {
+          console.warn('Failed to fetch trading data:', error);
+        }
+      }
+    };
+
+    // Fetch trading data after authentication
+    if (isAuthenticated && user && !isLoading) {
+      fetchTradingData();
+    }
+  }, [isAuthenticated, user, token, loginMethod, isLoading]);
         
         // Fetch fresh balances for all accounts by switching to each one
         for (const account of accountList) {

@@ -19,26 +19,7 @@ const TradingView: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [sellLoading, setSellLoading] = useState<Record<string, boolean>>({});
 
-  // Show loading while checking authentication
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading...</p>
-          <p className="text-gray-400 text-sm">
-            {user ? 'Loading signals...' : 'Checking authentication...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
+  // All useEffect hooks must be called before any conditional returns
   useEffect(() => {
     if (isConnected) {
       selectedSymbols.forEach(symbol => subscribeTo(symbol));
@@ -69,6 +50,26 @@ const TradingView: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [trades]);
+
+  // Show loading while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading...</p>
+          <p className="text-gray-400 text-sm">
+            {user ? 'Loading signals...' : 'Checking authentication...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
   const handleSyncWithDeriv = async () => {
     setIsSyncing(true);

@@ -34,6 +34,7 @@ interface AuthContextType {
   accountBalances: Record<string, number>;
   login: (token: string) => Promise<void>;
   loginWithOAuth: (token: string) => Promise<void>;
+  handleTokenLogin: (token: string, method: 'oauth' | 'token') => Promise<void>;
   logout: () => void;
   updateBalance: (balance: number) => void;
   switchAccount: (loginid: string) => Promise<void>;
@@ -238,6 +239,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     accountBalances,
     login,
     loginWithOAuth,
+    handleTokenLogin,
     logout,
     updateBalance,
     switchAccount,

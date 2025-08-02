@@ -203,7 +203,7 @@ class DerivAPI {
     }
   }
 
-  private sendRequest(request: any, timeout: number = 30000): Promise<any> {
+  sendRequest(request: any, timeout: number = 30000): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.isConnected || !this.ws) {
         // Try to reconnect if not connected
@@ -334,8 +334,13 @@ class DerivAPI {
   }
 
   async switchAccount(loginid: string): Promise<any> {
+    const token = this.getStoredToken();
+    if (!token) {
+      throw new Error('No token available for account switch');
+    }
+    
     return this.sendRequest({ 
-      authorize: this.getStoredToken(),
+      authorize: token,
       loginid: loginid,
       add_to_login_history: 1
     });
@@ -344,6 +349,11 @@ class DerivAPI {
   private getStoredToken(): string {
     // Get the token from localStorage or current session
     return localStorage.getItem('deriv_token') || '';
+  }
+
+  // Add a method to send requests directly (used by AuthContext)
+  async sendRequest(request: any, timeout: number = 30000): Promise<any> {
+    return this.sendRequest(request, timeout);
   }
 
   async sellContract(contractId: number): Promise<any> {

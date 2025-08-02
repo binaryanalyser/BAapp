@@ -5,7 +5,7 @@ import { BarChart3 } from 'lucide-react';
 
 const OAuthCallback: React.FC = () => {
   const location = useLocation();
-  const { login } = useAuth();
+  const { loginWithOAuth } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -134,7 +134,7 @@ const OAuthCallback: React.FC = () => {
 
         if (token) {
           console.log('Token received, attempting login... Token preview:', token.substring(0, 15) + '...');
-          await login(token);
+          await loginWithOAuth(token); // This is OAuth login
           console.log('Login successful, redirecting...');
           
           // Redirect to the original URL or dashboard

@@ -29,7 +29,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   accountList: AccountListItem[] | null;
+  loginMethod: 'oauth' | 'token' | null;
   login: (token: string) => Promise<void>;
+  loginWithOAuth: (token: string) => Promise<void>;
   logout: () => void;
   updateBalance: (balance: number) => void;
   switchAccount: (loginid: string) => Promise<void>;
@@ -55,6 +57,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [accountList, setAccountList] = useState<AccountListItem[] | null>(null);
+  const [loginMethod, setLoginMethod] = useState<'oauth' | 'token' | null>(null);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -64,8 +67,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check for saved token on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('deriv_token');
+    const savedLoginMethod = localStorage.getItem('deriv_login_method') as 'oauth' | 'token' | null;
     if (savedToken) {
-      handleTokenLogin(savedToken).catch(error => {
+      handleTokenLogin(savedToken, savedLoginMethod || 'token').catch(error => {
         console.error('Failed to restore session:', error);
         // Don't clear token immediately, let user try manual login
         setIsLoading(false);
@@ -75,7 +79,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const handleTokenLogin = async (authToken: string) => {
+  const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
     try {
       setIsLoading(true);
       console.log('Starting authentication with token...', authToken.substring(0, 10) + '...');
@@ -104,8 +108,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           country: response.authorize.country
         };
 
-        // Store account list for switching
-        if (response.authorize.account_list) {
+        // Store account list for switching (only for OAuth logins)
+        if (response.authorize.account_list && method === 'oauth') {
           const accounts: AccountListItem[] = response.authorize.account_list.map((account: any) => ({
             loginid: account.loginid,
             currency: account.currency,
@@ -119,14 +123,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }));
           setAccountList(accounts);
           console.log('Account list loaded:', accounts.length, 'accounts');
+        } else if (method === 'token') {
+          // For token login, don't store account list to prevent switching
+          setAccountList(null);
+          console.log('Token login - account switching disabled');
         }
 
         setUser(userData);
         setToken(authToken);
+        setLoginMethod(method);
         setIsAuthenticated(true);
         
         // Save token to localStorage
         localStorage.setItem('deriv_token', authToken);
+        localStorage.setItem('deriv_login_method', method);
         console.log('Authentication successful for:', userData.loginid);
         console.log('User data set, authentication complete');
       }
@@ -135,8 +145,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Only clear token if it's definitely invalid (not connection issues)
       if (error instanceof Error && error.message.includes('InvalidToken')) {
         localStorage.removeItem('deriv_token');
+        localStorage.removeItem('deriv_login_method');
         setUser(null);
         setToken(null);
+        setLoginMethod(null);
         setIsAuthenticated(false);
       } else {
         // For connection issues, keep the token but set loading to false
@@ -149,11 +161,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (authToken: string) => {
-    await handleTokenLogin(authToken);
+    await handleTokenLogin(authToken, 'token');
+  };
+
+  const loginWithOAuth = async (authToken: string) => {
+    await handleTokenLogin(authToken, 'oauth');
   };
 
   const switchAccount = async (loginid: string) => {
-    if (!isAuthenticated || !token) {
+    if (!isAuthenticated || !token || loginMethod !== 'oauth') {
       throw new Error('Not authenticated');
     }
 
@@ -327,9 +343,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setLoginMethod(null);
     setIsAuthenticated(false);
     setAccountList(null);
     localStorage.removeItem('deriv_token');
+    localStorage.removeItem('deriv_login_method');
     // Don't disconnect API as it might be used by other parts of the app
     console.log('User logged out');
   };
@@ -355,7 +373,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated,
     isLoading,
     accountList,
+    loginMethod,
     login,
+    loginWithOAuth,
     logout,
     updateBalance,
     switchAccount

@@ -8,7 +8,7 @@ const Login: React.FC = () => {
   const [showToken, setShowToken] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { login } = useAuth();
+  const { login, loginWithOAuth } = useAuth();
   const navigate = useNavigate();
 
   const handleDerivLogin = () => {
@@ -38,7 +38,7 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      await login(token);
+      await login(token); // This is API token login
       navigate('/');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed';

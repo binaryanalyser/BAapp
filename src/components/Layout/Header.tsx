@@ -4,7 +4,7 @@ import { BarChart3, User, LogOut, Menu, X, ChevronDown, RefreshCw } from 'lucide
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header: React.FC = () => {
-  const { user, isAuthenticated, logout, accountList, switchAccount, isLoading } = useAuth();
+  const { user, isAuthenticated, logout, accountList, switchAccount, isLoading, loginMethod } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
@@ -114,8 +114,8 @@ const Header: React.FC = () => {
           <div className="flex items-center space-x-4">
             {isAuthenticated && user ? (
               <div className="flex items-center space-x-2">
-                {/* Account Switcher */}
-                {accountList && accountList.length > 1 && (
+                {/* Account Switcher - Only show for OAuth logins */}
+                {loginMethod === 'oauth' && accountList && accountList.length > 1 && (
                   <div className="relative account-dropdown">
                     <button
                       onClick={() => setIsAccountDropdownOpen(!isAccountDropdownOpen)}
@@ -212,8 +212,14 @@ const Header: React.FC = () => {
 
                 {/* Current Account Info */}
                 <div className="text-right">
-                  {(!accountList || accountList.length <= 1) && (
+                  {(loginMethod === 'token' || !accountList || accountList.length <= 1) && (
                     <div className="text-sm text-gray-300">{user.loginid}</div>
+                  )}
+                  {loginMethod === 'token' && (
+                    <div className="text-xs text-blue-400">API Token</div>
+                  )}
+                  {loginMethod === 'oauth' && (
+                    <div className="text-xs text-green-400">OAuth Login</div>
                   )}
                   <div className="text-xs text-green-400">
                     {formatBalance(user.balance, user.currency)}

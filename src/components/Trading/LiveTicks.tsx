@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, TrendingUp, TrendingDown, Wifi, WifiOff, Target } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Wifi, WifiOff, Target, Brain, Zap, AlertCircle } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { derivAPI } from '../../services/derivAPI';
@@ -27,6 +27,15 @@ interface DigitStats {
   percentage: number;
 }
 
+interface Prediction {
+  type: 'MATCHES' | 'DIFFERS' | 'ODD' | 'EVEN' | 'OVER' | 'UNDER' | 'EQUAL';
+  confidence: number;
+  reasoning: string;
+  expectedDigit?: number;
+  color: string;
+  icon: React.ComponentType<any>;
+}
+
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const [selectedSymbol, setSelectedSymbol] = useState('R_10');
   const [activeTab, setActiveTab] = useState<'matches' | 'odd-even' | 'over-under'>('matches');
@@ -38,6 +47,10 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const [error, setError] = useState<string | null>(null);
   const [matchesHistory, setMatchesHistory] = useState<{ digit: number; matched: boolean; timestamp: number }[]>([]);
   const [differsHistory, setDiffersHistory] = useState<{ digit: number; differed: boolean; timestamp: number }[]>([]);
+  
+  // Predictions state
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [lastPredictionUpdate, setLastPredictionUpdate] = useState<number>(0);
   
   const { isConnected, ticks, subscribeTo, unsubscribeFrom } = useWebSocket();
 
@@ -205,6 +218,127 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     
     return { differs, total, percentage };
   };
+
+  // Generate AI predictions based on current patterns
+  const generatePredictions = (): Prediction[] => {
+    if (recentDigits.length < 10) return [];
+
+    const predictions: Prediction[] = [];
+    const recent10 = recentDigits.slice(-10);
+    const recent5 = recentDigits.slice(-5);
+    const lastDigit = recentDigits[recentDigits.length - 1];
+
+    // Matches/Differs Prediction
+    const recentMatches = matchesHistory.slice(-10);
+    const matchRate = recentMatches.length > 0 ? 
+      (recentMatches.filter(m => m.matched).length / recentMatches.length) * 100 : 50;
+    
+    if (matchRate > 60) {
+      predictions.push({
+        type: 'MATCHES',
+        confidence: Math.min(matchRate + 10, 85),
+        reasoning: `Recent match rate: ${matchRate.toFixed(1)}%. Pattern suggests continuation.`,
+        expectedDigit: lastDigit,
+        color: 'text-green-400',
+        icon: Target
+      });
+    } else if (matchRate < 40) {
+      predictions.push({
+        type: 'DIFFERS',
+        confidence: Math.min((100 - matchRate) + 10, 85),
+        reasoning: `Recent differ rate: ${(100 - matchRate).toFixed(1)}%. Pattern suggests change.`,
+        color: 'text-red-400',
+        icon: Target
+      });
+    }
+
+    // Odd/Even Prediction
+    const recentOdds = recent10.filter(d => d % 2 === 1).length;
+    const recentEvens = recent10.filter(d => d % 2 === 0).length;
+    
+    if (recentOdds > 7) {
+      predictions.push({
+        type: 'EVEN',
+        confidence: 65 + (recentOdds - 7) * 5,
+        reasoning: `${recentOdds}/10 recent digits were odd. Expecting balance correction.`,
+        color: 'text-blue-400',
+        icon: TrendingUp
+      });
+    } else if (recentEvens > 7) {
+      predictions.push({
+        type: 'ODD',
+        confidence: 65 + (recentEvens - 7) * 5,
+        reasoning: `${recentEvens}/10 recent digits were even. Expecting balance correction.`,
+        color: 'text-red-400',
+        icon: TrendingDown
+      });
+    }
+
+    // Over/Under Prediction
+    const recentOvers = recent10.filter(d => d > 5).length;
+    const recentUnders = recent10.filter(d => d < 5).length;
+    const recentEquals = recent10.filter(d => d === 5).length;
+    
+    if (recentOvers > 6) {
+      predictions.push({
+        type: 'UNDER',
+        confidence: 60 + (recentOvers - 6) * 3,
+        reasoning: `${recentOvers}/10 recent digits over 5. Market correction expected.`,
+        color: 'text-red-400',
+        icon: TrendingDown
+      });
+    } else if (recentUnders > 6) {
+      predictions.push({
+        type: 'OVER',
+        confidence: 60 + (recentUnders - 6) * 3,
+        reasoning: `${recentUnders}/10 recent digits under 5. Upward movement expected.`,
+        color: 'text-green-400',
+        icon: TrendingUp
+      });
+    }
+
+    // Hot/Cold Digit Prediction
+    const digitStats = calculateDigitStats();
+    if (digitStats.length > 0) {
+      const coldestDigit = digitStats[digitStats.length - 1];
+      const hottestDigit = digitStats[0];
+      
+      if (coldestDigit.count === 0 && digitHistory.length > 20) {
+        predictions.push({
+          type: 'MATCHES',
+          confidence: 70,
+          reasoning: `Digit ${coldestDigit.digit} hasn't appeared recently. Due for occurrence.`,
+          expectedDigit: coldestDigit.digit,
+          color: 'text-yellow-400',
+          icon: Brain
+        });
+      }
+    }
+
+    // Pattern Break Prediction
+    const last3 = recent5.slice(-3);
+    if (last3.length === 3 && last3.every(d => d === last3[0])) {
+      predictions.push({
+        type: 'DIFFERS',
+        confidence: 75,
+        reasoning: `Three consecutive ${last3[0]}s. Pattern break highly likely.`,
+        color: 'text-orange-400',
+        icon: AlertCircle
+      });
+    }
+
+    return predictions.slice(0, 3); // Return top 3 predictions
+  };
+
+  // Update predictions every 5 seconds or when significant pattern changes occur
+  useEffect(() => {
+    const now = Date.now();
+    if (recentDigits.length >= 10 && (now - lastPredictionUpdate > 5000 || predictions.length === 0)) {
+      const newPredictions = generatePredictions();
+      setPredictions(newPredictions);
+      setLastPredictionUpdate(now);
+    }
+  }, [recentDigits, matchesHistory, digitHistory, lastPredictionUpdate]);
 
   const calculateOddEvenStats = () => {
     if (digitHistory.length === 0) return { odd: 0, even: 0, total: 0, oddPercentage: 0, evenPercentage: 0 };
@@ -893,6 +1027,77 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
 
           {/* Tab Content */}
           {renderTabContent()}
+
+          {/* AI Predictions Section */}
+          {predictions.length > 0 && (
+            <div className="mt-6 bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg border border-purple-500/30 p-4">
+              <div className="flex items-center space-x-2 mb-4">
+                <Brain className="h-5 w-5 text-purple-400" />
+                <h4 className="text-lg font-medium text-white">AI Predictions</h4>
+                <Zap className="h-4 w-4 text-yellow-400 animate-pulse" />
+                <span className="text-xs text-gray-400">
+                  Updated {Math.floor((Date.now() - lastPredictionUpdate) / 1000)}s ago
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {predictions.map((prediction, index) => {
+                  const Icon = prediction.icon;
+                  return (
+                    <div
+                      key={index}
+                      className="bg-gray-800/50 rounded-lg border border-gray-600 p-3 hover:border-purple-500/50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <Icon className={`h-4 w-4 ${prediction.color}`} />
+                          <span className={`font-medium ${prediction.color}`}>
+                            {prediction.type}
+                          </span>
+                          {prediction.expectedDigit !== undefined && (
+                            <span className="bg-gray-700 px-2 py-1 rounded text-xs text-white">
+                              {prediction.expectedDigit}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <div className={`text-lg font-bold ${prediction.color}`}>
+                            {prediction.confidence.toFixed(0)}%
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <p className="text-xs text-gray-300 leading-relaxed">
+                        {prediction.reasoning}
+                      </p>
+                      
+                      {/* Confidence Bar */}
+                      <div className="mt-2">
+                        <div className="w-full bg-gray-700 rounded-full h-1">
+                          <div 
+                            className={`h-1 rounded-full transition-all duration-500 ${
+                              prediction.confidence >= 75 ? 'bg-green-400' :
+                              prediction.confidence >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+                            }`}
+                            style={{ width: `${prediction.confidence}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Prediction Disclaimer */}
+              <div className="mt-4 pt-3 border-t border-gray-600">
+                <p className="text-xs text-gray-500 text-center">
+                  <AlertCircle className="h-3 w-3 inline mr-1" />
+                  Predictions are based on pattern analysis and should not be used as sole trading decisions.
+                  Past patterns do not guarantee future results.
+                </p>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

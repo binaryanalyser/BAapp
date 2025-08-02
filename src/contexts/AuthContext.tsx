@@ -192,7 +192,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }));
 
         setAccountList(prevList =>
-          prevList
+          prevListd
             ? prevList.map(acc =>
                 acc.loginid === loginid
                   ? { ...acc, balance: response.authorize.balance }

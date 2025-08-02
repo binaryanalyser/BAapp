@@ -354,6 +354,98 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     return predictions.slice(0, 3); // Return top 3 predictions
   };
 
+  // Filter predictions by tab
+  const getTabPredictions = (tabType: 'matches' | 'odd-even' | 'over-under'): Prediction[] => {
+    const allPredictions = generatePredictions();
+    
+    switch (tabType) {
+      case 'matches':
+        return allPredictions.filter(p => p.type === 'MATCHES' || p.type === 'DIFFERS');
+      case 'odd-even':
+        return allPredictions.filter(p => p.type === 'ODD' || p.type === 'EVEN');
+      case 'over-under':
+        return allPredictions.filter(p => p.type === 'OVER' || p.type === 'UNDER' || p.type === 'EQUAL');
+      default:
+        return [];
+    }
+  };
+
+  // Render prediction cards
+  const renderPredictions = (tabType: 'matches' | 'odd-even' | 'over-under') => {
+    const tabPredictions = getTabPredictions(tabType);
+    
+    if (tabPredictions.length === 0) return null;
+
+    return (
+      <div className="mt-6 bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg border border-purple-500/30 p-4">
+        <div className="flex items-center space-x-2 mb-4">
+          <Brain className="h-5 w-5 text-purple-400" />
+          <h4 className="text-lg font-medium text-white">AI Predictions</h4>
+          <Zap className="h-4 w-4 text-yellow-400 animate-pulse" />
+          <span className="text-xs text-gray-400">
+            Updated {Math.floor((Date.now() - lastPredictionUpdate) / 1000)}s ago
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {tabPredictions.map((prediction, index) => {
+            const Icon = prediction.icon;
+            return (
+              <div
+                key={index}
+                className="bg-gray-800/50 rounded-lg border border-gray-600 p-3 hover:border-purple-500/50 transition-colors"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Icon className={`h-4 w-4 ${prediction.color}`} />
+                    <span className={`font-medium ${prediction.color}`}>
+                      {prediction.type}
+                    </span>
+                    {prediction.expectedDigit !== undefined && (
+                      <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white font-bold">
+                        {prediction.expectedDigit}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <div className={`text-lg font-bold ${prediction.color}`}>
+                      {prediction.confidence.toFixed(0)}%
+                    </div>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  {prediction.reasoning}
+                </p>
+                
+                {/* Confidence Bar */}
+                <div className="mt-2">
+                  <div className="w-full bg-gray-700 rounded-full h-1">
+                    <div 
+                      className={`h-1 rounded-full transition-all duration-500 ${
+                        prediction.confidence >= 75 ? 'bg-green-400' :
+                        prediction.confidence >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+                      }`}
+                      style={{ width: `${prediction.confidence}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Prediction Disclaimer */}
+        <div className="mt-4 pt-3 border-t border-gray-600">
+          <p className="text-xs text-gray-500 text-center">
+            <AlertCircle className="h-3 w-3 inline mr-1" />
+            Predictions are based on pattern analysis and should not be used as sole trading decisions.
+            Past patterns do not guarantee future results.
+          </p>
+        </div>
+      </div>
+    );
+  };
   // Update predictions every 5 seconds or when significant pattern changes occur
   useEffect(() => {
     const now = Date.now();
@@ -650,6 +742,9 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
           </div>
         </div>
       )}
+
+      {/* AI Predictions for Over/Under */}
+      {renderPredictions('over-under')}
     </>
     );
   };
@@ -747,6 +842,9 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
           </div>
         </div>
       </div>
+
+      {/* AI Predictions for Matches/Differs */}
+      {renderPredictions('matches')}
     </div>
   );
 
@@ -896,6 +994,9 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
           </div>
         </div>
       </div>
+
+      {/* AI Predictions for Odd/Even */}
+      {renderPredictions('odd-even')}
     </div>
   );
 
@@ -1052,76 +1153,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
           {/* Tab Content */}
           {renderTabContent()}
 
-          {/* AI Predictions Section */}
-          {predictions.length > 0 && (
-            <div className="mt-6 bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg border border-purple-500/30 p-4">
-              <div className="flex items-center space-x-2 mb-4">
-                <Brain className="h-5 w-5 text-purple-400" />
-                <h4 className="text-lg font-medium text-white">AI Predictions</h4>
-                <Zap className="h-4 w-4 text-yellow-400 animate-pulse" />
-                <span className="text-xs text-gray-400">
-                  Updated {Math.floor((Date.now() - lastPredictionUpdate) / 1000)}s ago
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {predictions.map((prediction, index) => {
-                  const Icon = prediction.icon;
-                  return (
-                    <div
-                      key={index}
-                      className="bg-gray-800/50 rounded-lg border border-gray-600 p-3 hover:border-purple-500/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <Icon className={`h-4 w-4 ${prediction.color}`} />
-                          <span className={`font-medium ${prediction.color}`}>
-                            {prediction.type}
-                          </span>
-                          {prediction.expectedDigit !== undefined && (
-                            <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white font-bold">
-                              {prediction.expectedDigit}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <div className={`text-lg font-bold ${prediction.color}`}>
-                            {prediction.confidence.toFixed(0)}%
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <p className="text-xs text-gray-300 leading-relaxed">
-                        {prediction.reasoning}
-                      </p>
-                      
-                      {/* Confidence Bar */}
-                      <div className="mt-2">
-                        <div className="w-full bg-gray-700 rounded-full h-1">
-                          <div 
-                            className={`h-1 rounded-full transition-all duration-500 ${
-                              prediction.confidence >= 75 ? 'bg-green-400' :
-                              prediction.confidence >= 60 ? 'bg-yellow-400' : 'bg-red-400'
-                            }`}
-                            style={{ width: `${prediction.confidence}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Prediction Disclaimer */}
-              <div className="mt-4 pt-3 border-t border-gray-600">
-                <p className="text-xs text-gray-500 text-center">
-                  <AlertCircle className="h-3 w-3 inline mr-1" />
-                  Predictions are based on pattern analysis and should not be used as sole trading decisions.
-                  Past patterns do not guarantee future results.
-                </p>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>

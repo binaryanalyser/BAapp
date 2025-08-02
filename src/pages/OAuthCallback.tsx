@@ -11,9 +11,12 @@ const OAuthCallback: React.FC = () => {
   useEffect(() => {
     const handleOAuthCallback = async () => {
       try {
+        console.log('=== OAuth Callback Debug Info ===');
         console.log('OAuth callback - Full URL:', window.location.href);
         console.log('OAuth callback - Hash:', window.location.hash);
         console.log('OAuth callback - Search:', window.location.search);
+        console.log('OAuth callback - Pathname:', window.location.pathname);
+        console.log('OAuth callback - Origin:', window.location.origin);
         
         // Try to get token from hash first (OAuth 2.0 implicit flow)
         let token = null;

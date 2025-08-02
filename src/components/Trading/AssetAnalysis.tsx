@@ -70,9 +70,83 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     }
   }, [ticks, selectedSymbol]);
 
+  // Advanced technical analysis functions
+  const calculateRSI = useCallback((prices: number[], period: number = 14): number => {
+    if (prices.length < 10) return 50; // Reduced from period + 1
+    
+    let gains = 0;
+    let losses = 0;
+    
+    const actualPeriod = Math.min(period, prices.length - 1);
+    for (let i = 1; i <= actualPeriod; i++) {
+      const change = prices[i] - prices[i - 1];
+      if (change > 0) gains += change;
+      else losses -= change;
+    }
+    
+    const avgGain = gains / actualPeriod;
+    const avgLoss = losses / actualPeriod;
+    const rs = avgGain / avgLoss;
+    
+    return 100 - (100 / (1 + rs));
+  }, []);
+
+  const calculateMACD = useCallback((prices: number[]): 'bullish' | 'bearish' | 'neutral' => {
+    if (prices.length < 10) return 'neutral'; // Reduced from 26
+    
+    const shortPeriod = Math.min(6, prices.length); // Reduced from 12
+    const longPeriod = Math.min(12, prices.length); // Reduced from 26
+    const ema12 = prices.slice(-shortPeriod).reduce((a, b) => a + b) / shortPeriod;
+    const ema26 = prices.slice(-longPeriod).reduce((a, b) => a + b) / longPeriod;
+    const macdLine = ema12 - ema26;
+    
+    if (macdLine > 0.0005) return 'bullish'; // Reduced from 0.001
+    if (macdLine < -0.0005) return 'bearish'; // Reduced from -0.001
+    return 'neutral';
+  }, []);
+
+  const calculateBollingerBands = useCallback((prices: number[], period: number = 10): 'squeeze' | 'expansion' | 'normal' => {
+    if (prices.length < 5) return 'normal'; // Reduced from period
+    
+    const actualPeriod = Math.min(period, prices.length);
+    const recentPrices = prices.slice(-actualPeriod);
+    const sma = recentPrices.reduce((a, b) => a + b) / actualPeriod;
+    const variance = recentPrices.reduce((sum, price) => sum + Math.pow(price - sma, 2), 0) / period;
+    const stdDev = Math.sqrt(variance);
+    
+    const bandWidth = (stdDev * 2) / sma;
+    
+    if (bandWidth < 0.0005) return 'squeeze'; // Reduced from 0.001
+    if (bandWidth > 0.002) return 'expansion'; // Reduced from 0.005
+    return 'normal';
+  }, []);
+
+  const analyzePriceAction = useCallback((prices: number[]) => {
+    if (prices.length < 5) return { trend: 'sideways' as const, momentum: 0, volatility: 0 }; // Reduced from 10
+    
+    const recentLength = Math.min(5, Math.floor(prices.length / 2)); // Reduced from 10
+    const olderLength = Math.min(10, prices.length - recentLength); // Reduced from 20
+    const recent = prices.slice(-recentLength);
+    const older = prices.slice(-olderLength, -recentLength);
+    
+    const recentAvg = recent.reduce((a, b) => a + b) / recent.length;
+    const olderAvg = older.length > 0 ? older.reduce((a, b) => a + b) / older.length : recentAvg;
+    
+    const trend = recentAvg > olderAvg * 1.0005 ? 'uptrend' :  // Reduced from 1.001
+                  recentAvg < olderAvg * 0.9995 ? 'downtrend' : 'sideways'; // Reduced from 0.999
+    
+    const momentum = ((recentAvg - olderAvg) / olderAvg) * 100;
+    
+    const avgPrice = prices.reduce((a, b) => a + b) / prices.length;
+    const variance = prices.reduce((sum, price) => sum + Math.pow(price - avgPrice, 2), 0) / prices.length;
+    const volatility = Math.sqrt(variance) / avgPrice;
+    
+    return { trend, momentum, volatility };
+  }, []);
+
   // Calculate technical indicators
   const calculateTechnicalIndicators = useCallback((prices: number[]) => {
-    if (prices.length < 20) return null;
+    if (prices.length < 10) return null;
 
     const recent = prices.slice(-20);
     const current = prices[prices.length - 1];
@@ -133,62 +207,85 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     if (!indicators) return null;
 
     let signalType: AnalysisSignal['type'] = 'CALL';
-    let confidence = 50;
+    let confidence = 40; // Reduced from 50
     let strength: AnalysisSignal['strength'] = 'LOW';
     let reasoning = '';
     let duration = 300; // 5 minutes default
 
     // RSI-based signals
-    if (indicators.rsi < 30 && indicators.trend === 'BULLISH') {
+    if (indicators.rsi < 40 && indicators.trend === 'BULLISH') { // Relaxed from 30
       signalType = 'CALL';
-      confidence += 25;
-      reasoning = 'RSI oversold with bullish trend';
+      confidence += 20; // Reduced from 25
+      reasoning = 'RSI favorable with bullish trend';
       strength = 'HIGH';
       duration = 300; // 5 minutes
-    } else if (indicators.rsi > 70 && indicators.trend === 'BEARISH') {
+    } else if (indicators.rsi > 60 && indicators.trend === 'BEARISH') { // Relaxed from 70
       signalType = 'PUT';
-      confidence += 25;
-      reasoning = 'RSI overbought with bearish trend';
+      confidence += 20; // Reduced from 25
+      reasoning = 'RSI favorable with bearish trend';
       strength = 'HIGH';
       duration = 300; // 5 minutes
-    } else if (indicators.trend === 'BULLISH' && indicators.momentum > 0.1) {
+    } else if (indicators.trend === 'BULLISH' && indicators.momentum > 0.05) { // Reduced from 0.1
       signalType = 'CALL';
-      confidence += 15;
+      confidence += 12; // Reduced from 15
       reasoning = 'Strong bullish momentum detected';
       strength = 'MEDIUM';
       duration = 180; // 3 minutes
-    } else if (indicators.trend === 'BEARISH' && indicators.momentum < -0.1) {
+    } else if (indicators.trend === 'BEARISH' && indicators.momentum < -0.05) { // Reduced from -0.1
       signalType = 'PUT';
-      confidence += 15;
+      confidence += 12; // Reduced from 15
       reasoning = 'Strong bearish momentum detected';
       strength = 'MEDIUM';
       duration = 180; // 3 minutes
     }
 
     // High volatility digit signals
-    if (indicators.volClass === 'HIGH' && Math.random() > 0.6) {
+    if (indicators.volClass === 'HIGH' && Math.random() > 0.4) { // Increased chance from 0.6 to 0.4
       const lastDigit = Math.floor((currentPrice * 10000) % 10);
       signalType = Math.random() > 0.5 ? 'MATCH' : 'DIFFER';
-      confidence += 20;
+      confidence += 15; // Reduced from 20
       reasoning = `High volatility detected. Last digit: ${lastDigit}`;
       strength = 'MEDIUM';
       duration = 120; // 2 minutes
     }
 
+    // Additional signal opportunities - more frequent generation
+    if (confidence < 50) {
+      // Generate signals based on simple price movement
+      const recentMovement = indicators.momentum;
+      if (Math.abs(recentMovement) > 0.02) { // Any movement > 0.02%
+        signalType = recentMovement > 0 ? 'CALL' : 'PUT';
+        confidence += 15;
+        reasoning = `Price movement detected: ${recentMovement > 0 ? 'upward' : 'downward'} momentum`;
+        strength = 'LOW';
+        duration = 180;
+      }
+      
+      // Random digit signals more frequently
+      if (Math.random() > 0.5) { // 50% chance
+        const lastDigit = Math.floor((currentPrice * 10000) % 10);
+        signalType = Math.random() > 0.5 ? 'MATCH' : 'DIFFER';
+        confidence += 10;
+        reasoning = `Digit analysis opportunity. Last digit: ${lastDigit}`;
+        strength = 'LOW';
+        duration = 120;
+      }
+    }
+
     // Adjust strength based on confidence
-    if (confidence >= 85) strength = 'CRITICAL';
-    else if (confidence >= 75) strength = 'HIGH';
-    else if (confidence >= 65) strength = 'MEDIUM';
+    if (confidence >= 75) strength = 'CRITICAL'; // Reduced from 85
+    else if (confidence >= 65) strength = 'HIGH'; // Reduced from 75
+    else if (confidence >= 55) strength = 'MEDIUM'; // Reduced from 65
     else strength = 'LOW';
 
     // Only generate signals with reasonable confidence
-    if (confidence < 60) return null;
+    if (confidence < 45) return null; // Reduced from 60
 
     return {
       id: `${selectedSymbol}-${Date.now()}`,
       type: signalType,
       strength,
-      confidence: Math.min(confidence, 95),
+      confidence: Math.min(confidence, 90), // Reduced max from 95
       reasoning,
       timestamp: Date.now(),
       duration,
@@ -199,7 +296,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
   // Perform analysis
   const performAnalysis = useCallback(() => {
     // Don't analyze if we have insufficient data
-    if (priceHistory.length < 20) return;
+    if (priceHistory.length < 10) return; // Reduced from 20
     
     // Don't analyze if signal is active or we're in countdown period
     if (currentSignal && countdown > 0) return;
@@ -272,7 +369,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
 
   // Start continuous analysis when we have enough data and no active signal
   useEffect(() => {
-    if (priceHistory.length >= 20 && !currentSignal && !isWaitingForNextAnalysis && !isAnalyzing) {
+    if (priceHistory.length >= 10 && !currentSignal && !isWaitingForNextAnalysis && !isAnalyzing) { // Reduced from 20
       startContinuousAnalysis();
     } else {
       stopContinuousAnalysis();
@@ -330,7 +427,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
 
   // Manual analysis trigger
   const handleManualAnalysis = useCallback(() => {
-    if (priceHistory.length >= 20 && !currentSignal && !isWaitingForNextAnalysis) {
+    if (priceHistory.length >= 10 && !currentSignal && !isWaitingForNextAnalysis) {
       performAnalysis();
     }
   }, [priceHistory.length, currentSignal, isWaitingForNextAnalysis, performAnalysis]);
@@ -529,18 +626,18 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
           </div>
           <div className="mb-2">
             <span className="text-sm text-gray-400">
-              {priceHistory.length >= 20 && !currentSignal && !isWaitingForNextAnalysis ? 'Scanning...' : 'Ready'}
+              {priceHistory.length >= 10 && !currentSignal && !isWaitingForNextAnalysis ? 'Scanning...' : 'Ready'}
             </span>
           </div>
           <h4 className="text-lg font-medium text-white mb-2">
             {isAnalyzing ? 'Analyzing Market Conditions' : 
-             priceHistory.length < 20 ? 'Collecting Market Data' :
+             priceHistory.length < 10 ? 'Collecting Market Data' :
              isWaitingForNextAnalysis && nextAnalysisCountdown > 0 ? 'Waiting for Next Analysis' : 
              'Continuously Scanning for Signals'}
           </h4>
           <p className="text-gray-400 text-sm">
             {isAnalyzing ? `Analyzing ${selectedSymbol} price patterns and indicators...` :
-             priceHistory.length < 20 ? `Need ${20 - priceHistory.length} more price points` :
+             priceHistory.length < 10 ? `Need ${10 - priceHistory.length} more price points` : // Reduced from 20
              isWaitingForNextAnalysis && nextAnalysisCountdown > 0 ? `Next analysis in ${formatTime(nextAnalysisCountdown)}` :
              'Automatically scanning market conditions every 3 seconds'}
           </p>
@@ -567,16 +664,16 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
           )}
           
           {/* Progress Bar for Market Data Collection */}
-          {priceHistory.length < 20 && (
+          {priceHistory.length < 10 && ( // Reduced from 20
             <div className="mt-4">
               <div className="flex justify-between text-sm text-gray-400 mb-2">
                 <span>Collecting Market Data</span>
-                <span>{priceHistory.length}/20</span>
+                <span>{priceHistory.length}/10</span> {/* Reduced from 20 */}
               </div>
               <div className="w-full bg-gray-700 rounded-full h-3">
                 <div 
                   className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${(priceHistory.length / 20) * 100}%` }}
+                  style={{ width: `${(priceHistory.length / 10) * 100}%` }} {/* Reduced from 20 */}
                 ></div>
               </div>
               <div className="text-xs text-gray-500 mt-1 text-center">
@@ -588,7 +685,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
             </div>
           )}
           
-          {!isAnalyzing && priceHistory.length >= 20 && !isWaitingForNextAnalysis && (
+          {!isAnalyzing && priceHistory.length >= 10 && !isWaitingForNextAnalysis && ( // Reduced from 20
             <button
               onClick={handleManualAnalysis}
               className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"

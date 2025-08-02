@@ -81,3 +81,4 @@ const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = '
 };
 
 export const useAuth = () => {
+}

@@ -950,7 +950,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               </div>
             </div>
           </div>
-        )}
       </div>
       </div>
     </div>

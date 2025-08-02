@@ -341,10 +341,6 @@ class DerivAPI {
     });
   }
 
-  async sendRequest(request: any, timeout: number = 30000): Promise<any> {
-    return this.sendRequest(request, timeout);
-  }
-
   private getStoredToken(): string {
     // Get the token from localStorage or current session
     return localStorage.getItem('deriv_token') || '';

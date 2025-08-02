@@ -79,3 +79,5 @@ const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = '
     setIsLoading(false);
   }
 };
+
+export const useAuth = () => {

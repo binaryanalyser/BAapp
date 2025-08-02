@@ -74,9 +74,9 @@ const Login: React.FC = () => {
           <div className="flex justify-center">
             <img src="/welcom_logo.png" alt="Binary Analyzer" className="h-[45px] w-[45px]" />
           </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-white">
-            Welcome to Binary Analyzer
-          </h2>
+          <h1 className="mt-6 text-3xl font-extrabold text-white">
+            Welcome to AI Powered LDP Binary Analyzer
+          </h1>
           <p className="mt-2 text-sm text-gray-400">
             Connect your Deriv account to start analyzing and trading
           </p>

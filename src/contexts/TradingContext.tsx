@@ -285,11 +285,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     if (isAuthenticated && derivAPI.getConnectionStatus()) {
       const subscribeToPortfolio = async () => {
         try {
-          // Subscribe to portfolio updates
-          await derivAPI.sendRequest({ 
-            portfolio: 1, 
-            subscribe: 1 
-          });
+          // Subscribe to portfolio updates using the dedicated method
+          await derivAPI.subscribeToPortfolio();
           console.log('✅ Subscribed to portfolio updates');
         } catch (error) {
           console.warn('Failed to subscribe to portfolio updates:', error);

@@ -447,7 +447,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       
       console.log(`Analysis complete. Next analysis in ${signalDuration} minutes.`);
     }, 3000); // 3 second analysis simulation for multi-asset
-  }, [marketData, generateAIRecommendation, generateMultiAssetSignals, selectedAsset, signalDuration, generateAdvancedSignal, isAnalysisActive, lastRecommendationTime]);
+  }, [marketData, generateAIRecommendation, generateMultiAssetSignals, selectedAsset, signalDuration, generateAdvancedSignal, isAnalysisActive, lastRecommendationTime, aiRecommendation, aiCountdown]);
 
   // Handle duration change
   useEffect(() => {
@@ -456,7 +456,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       console.log(`Duration changed to ${signalDuration} minutes. Restarting analysis...`);
       performAnalysis();
     }
-  }, [signalDuration, performAnalysis, isInitializing, aiRecommendation]);
+  }, [signalDuration, performAnalysis, isInitializing, aiRecommendation, aiCountdown, marketData]);
 
   // AI Recommendation countdown
   useEffect(() => {
@@ -950,6 +950,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               </div>
             </div>
           </div>
+        ) : null}
       </div>
       </div>
     </div>

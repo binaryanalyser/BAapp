@@ -27,7 +27,7 @@ const Login: React.FC = () => {
     const redirectUri = 'https://binaryanalyser.com/oauth-callback';
     
     // Try multiple OAuth configurations
-    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&l=EN&brand=deriv&&brand=deriv&affiliate_token=BaCPYA-yzOQZVaW9c_B4ZGNd7ZgqdRLkredirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=read,trade`;
+    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&affiliate_token=Yqc93056kqBB4VdSfJsOp2Nd7ZgqdRLk/1/&l=EN&brand=deriv&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=read,trade`;
     
     console.log('OAuth Redirect URI:', redirectUri);
     console.log('Full OAuth URL:', authUrl);

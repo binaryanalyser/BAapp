@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Minus, Clock, Target, Brain, Zap, Activity, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Clock, Target, Brain, Zap, Activity, AlertCircle, BarChart3 } from 'lucide-react';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -55,6 +55,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   const [lastRecommendationTime, setLastRecommendationTime] = useState<number>(0);
   const [isAnalysisActive, setIsAnalysisActive] = useState<boolean>(false);
   const [isSwitchingAccount, setIsSwitchingAccount] = useState<boolean>(false);
+  const [multiAssetSignals, setMultiAssetSignals] = useState<Record<string, Signal>>({});
+  const [analyzedAssets] = useState<string[]>(['R_10', 'R_25', 'R_50', 'R_75', 'R_100', 'BOOM1000', 'CRASH1000']);
 
   // AI Recommendation state
   const [aiRecommendation, setAiRecommendation] = useState<{
@@ -132,99 +134,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     
     return { trend, momentum, volatility };
   }, []);
-
-  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
-    action: 'BUY' | 'SELL' | 'NEUTRAL' | null;
-    confidence: number;
-    reasoning: string;
-  } => {
-    const symbols = Object.keys(marketData);
-    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
-
-    let totalBullishSignals = 0;
-    let totalBearishSignals = 0;
-    let totalConfidence = 0;
-    let reasoningParts: string[] = [];
-    let analyzedSymbols = 0;
-
-    symbols.forEach(symbol => {
-      const data = marketData[symbol];
-      if (data.previousPrices.length < 20) return;
-
-      analyzedSymbols++;
-      let symbolScore = 0;
-
-      const rsi = calculateRSI(data.previousPrices);
-      const macd = calculateMACD(data.previousPrices);
-      const priceAction = analyzePriceAction(data.previousPrices);
-      const bollinger = calculateBollingerBands(data.previousPrices);
-
-      // RSI Analysis
-      if (rsi < 30) {
-        totalBullishSignals += 2;
-        symbolScore += 2;
-        reasoningParts.push(`${symbol}: Oversold (RSI: ${rsi.toFixed(0)})`);
-      } else if (rsi > 70) {
-        totalBearishSignals += 2;
-        symbolScore -= 2;
-        reasoningParts.push(`${symbol}: Overbought (RSI: ${rsi.toFixed(0)})`);
-      }
-
-      // MACD Analysis
-      if (macd === 'bullish') {
-        totalBullishSignals += 1;
-        symbolScore += 1;
-      } else if (macd === 'bearish') {
-        totalBearishSignals += 1;
-        symbolScore -= 1;
-      }
-
-      // Price Action Analysis
-      if (priceAction.trend === 'uptrend' && priceAction.momentum > 0.1) {
-        totalBullishSignals += 1;
-        symbolScore += 1;
-      } else if (priceAction.trend === 'downtrend' && priceAction.momentum < -0.1) {
-        totalBearishSignals += 1;
-        symbolScore -= 1;
-      }
-
-      // Bollinger Bands Analysis
-      if (bollinger === 'squeeze') {
-        totalConfidence += 10; // Volatility breakout expected
-        reasoningParts.push(`${symbol}: Volatility squeeze detected`);
-      }
-
-      totalConfidence += Math.abs(symbolScore) * 5;
-    });
-
-    if (analyzedSymbols === 0) {
-      return { action: 'NEUTRAL', confidence: 0, reasoning: 'Insufficient market data for analysis' };
-    }
-
-    // Determine overall recommendation
-    const netSignal = totalBullishSignals - totalBearishSignals;
-    const baseConfidence = Math.min(totalConfidence / analyzedSymbols, 95);
-    
-    let action: 'BUY' | 'SELL' | 'NEUTRAL';
-    let confidence: number;
-    let reasoning: string;
-
-    if (netSignal > 2) {
-      action = 'BUY';
-      confidence = Math.min(baseConfidence + (netSignal * 5), 95);
-      reasoning = `Bullish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
-    } else if (netSignal < -2) {
-      action = 'SELL';
-      confidence = Math.min(baseConfidence + (Math.abs(netSignal) * 5), 95);
-      reasoning = `Bearish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
-    } else {
-      action = 'NEUTRAL';
-      confidence = Math.max(baseConfidence - 20, 30);
-      reasoning = `Mixed signals across markets. ${analyzedSymbols} assets analyzed with conflicting indicators`;
-    }
-
-    return { action, confidence: Math.round(confidence), reasoning };
-  }, [calculateRSI, calculateMACD, analyzePriceAction, calculateBollingerBands]);
 
   const generateAdvancedSignal = useCallback((symbol: string, currentPrice: number, data: MarketData): Signal | null => {
     const { previousPrices } = data;
@@ -312,6 +221,115 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
     };
   }, [calculateRSI, calculateMACD, calculateBollingerBands, analyzePriceAction]);
 
+  const generateMultiAssetSignals = useCallback((marketData: Record<string, MarketData>) => {
+    const newSignals: Record<string, Signal> = {};
+    
+    analyzedAssets.forEach(symbol => {
+      const data = marketData[symbol];
+      if (!data || data.previousPrices.length < 20) return;
+
+      const signal = generateAdvancedSignal(symbol, data.price, data);
+      if (signal) {
+        newSignals[symbol] = signal;
+      }
+    });
+    
+    setMultiAssetSignals(newSignals);
+  }, [analyzedAssets, generateAdvancedSignal]);
+
+  const generateAIRecommendation = useCallback((marketData: Record<string, MarketData>): {
+    action: 'BUY' | 'SELL' | 'NEUTRAL' | null;
+    confidence: number;
+    reasoning: string;
+  } => {
+    const symbols = analyzedAssets.filter(symbol => marketData[symbol]);
+    if (symbols.length === 0) return { action: null, confidence: 0, reasoning: 'No market data available' };
+
+    let totalBullishSignals = 0;
+    let totalBearishSignals = 0;
+    let totalConfidence = 0;
+    let reasoningParts: string[] = [];
+    let analyzedSymbols = 0;
+
+    symbols.forEach(symbol => {
+      const data = marketData[symbol];
+      if (data.previousPrices.length < 20) return;
+
+      analyzedSymbols++;
+      let symbolScore = 0;
+
+      const rsi = calculateRSI(data.previousPrices);
+      const macd = calculateMACD(data.previousPrices);
+      const priceAction = analyzePriceAction(data.previousPrices);
+      const bollinger = calculateBollingerBands(data.previousPrices);
+
+      // RSI Analysis
+      if (rsi < 30) {
+        totalBullishSignals += 2;
+        symbolScore += 2;
+        reasoningParts.push(`${symbol}: Oversold (RSI: ${rsi.toFixed(0)})`);
+      } else if (rsi > 70) {
+        totalBearishSignals += 2;
+        symbolScore -= 2;
+        reasoningParts.push(`${symbol}: Overbought (RSI: ${rsi.toFixed(0)})`);
+      }
+
+      // MACD Analysis
+      if (macd === 'bullish') {
+        totalBullishSignals += 1;
+        symbolScore += 1;
+      } else if (macd === 'bearish') {
+        totalBearishSignals += 1;
+        symbolScore -= 1;
+      }
+
+      // Price Action Analysis
+      if (priceAction.trend === 'uptrend' && priceAction.momentum > 0.1) {
+        totalBullishSignals += 1;
+        symbolScore += 1;
+      } else if (priceAction.trend === 'downtrend' && priceAction.momentum < -0.1) {
+        totalBearishSignals += 1;
+        symbolScore -= 1;
+      }
+
+      // Bollinger Bands Analysis
+      if (bollinger === 'squeeze') {
+        totalConfidence += 10; // Volatility breakout expected
+        reasoningParts.push(`${symbol}: Volatility squeeze detected`);
+      }
+
+      totalConfidence += Math.abs(symbolScore) * 5;
+    });
+
+    if (analyzedSymbols === 0) {
+      return { action: 'NEUTRAL', confidence: 0, reasoning: 'Insufficient market data for analysis' };
+    }
+
+    // Determine overall recommendation
+    const netSignal = totalBullishSignals - totalBearishSignals;
+    const baseConfidence = Math.min(totalConfidence / analyzedSymbols, 95);
+    
+    let action: 'BUY' | 'SELL' | 'NEUTRAL';
+    let confidence: number;
+    let reasoning: string;
+
+    if (netSignal > 2) {
+      action = 'BUY';
+      confidence = Math.min(baseConfidence + (netSignal * 5), 95);
+      reasoning = `Bullish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
+    } else if (netSignal < -2) {
+      action = 'SELL';
+      confidence = Math.min(baseConfidence + (Math.abs(netSignal) * 5), 95);
+      reasoning = `Bearish market conditions detected. ${reasoningParts.slice(0, 2).join(', ')}`;
+    } else {
+      action = 'NEUTRAL';
+      confidence = Math.max(baseConfidence - 20, 30);
+      reasoning = `Mixed signals across markets. ${analyzedSymbols} assets analyzed with conflicting indicators`;
+    }
+
+    return { action, confidence: Math.round(confidence), reasoning };
+  }, [calculateRSI, calculateMACD, analyzePriceAction, calculateBollingerBands, analyzedAssets]);
+
   // Update market data and generate signals
   useEffect(() => {
     Object.entries(ticks).forEach(([symbol, tick]) => {
@@ -384,6 +402,9 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       // Generate AI Recommendation
       const recommendation = generateAIRecommendation(marketData);
       
+      // Generate multi-asset signals
+      generateMultiAssetSignals(marketData);
+      
       // Only update recommendation if we have valid data
       if (recommendation.action && recommendation.confidence > 0) {
         setAiRecommendation({
@@ -425,8 +446,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
       setIsAnalysisActive(false);
       
       console.log(`Analysis complete. Next analysis in ${signalDuration} minutes.`);
-    }, 2000); // 2 second analysis simulation
-  }, [marketData, generateAIRecommendation, selectedAsset, signalDuration, generateAdvancedSignal, isAnalysisActive, lastRecommendationTime]);
+    }, 3000); // 3 second analysis simulation for multi-asset
+  }, [marketData, generateAIRecommendation, generateMultiAssetSignals, selectedAsset, signalDuration, generateAdvancedSignal, isAnalysisActive, lastRecommendationTime]);
 
   // Handle duration change
   useEffect(() => {
@@ -564,18 +585,20 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
   ];
 
   return (
-    <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-xl border border-gray-600 shadow-2xl overflow-hidden">
+    <div className="space-y-6">
+      {/* Full Width AI Trading Signals Header */}
+      <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-xl border border-gray-600 shadow-2xl overflow-hidden">
       {/* Header Section */}
       <div className="bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-blue-600/20 border-b border-gray-600 p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="relative">
               <div className="absolute inset-0 bg-blue-500 rounded-full animate-pulse opacity-20"></div>
-              <Brain className="h-8 w-8 text-blue-400 relative z-10" />
+              <Brain className="h-10 w-10 text-blue-400 relative z-10" />
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-white">AI Trading Signals</h3>
-              <p className="text-sm text-gray-300">Advanced algorithmic analysis</p>
+              <h3 className="text-3xl font-bold text-white">AI Multi-Asset Trading Signals</h3>
+              <p className="text-sm text-gray-300">Real-time analysis across {analyzedAssets.length} trading assets</p>
             </div>
           </div>
           
@@ -633,17 +656,131 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               </div>
               
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
-                <div className="text-blue-400 font-bold">{signals.length}</div>
-                <div className="text-gray-400 text-xs">Active</div>
+                <div className="text-blue-400 font-bold">{Object.keys(multiAssetSignals).length}</div>
+                <div className="text-gray-400 text-xs">Assets</div>
               </div>
               <div className="bg-gray-700/50 rounded-lg px-3 py-2 border border-gray-600">
                 <div className="text-green-400 font-bold">{Object.keys(marketData).length}</div>
-                <div className="text-gray-400 text-xs">Assets</div>
+                <div className="text-gray-400 text-xs">Live Data</div>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
+      {/* Multi-Asset Signals Grid */}
+      <div className="p-6">
+        {Object.keys(multiAssetSignals).length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+            {Object.entries(multiAssetSignals).map(([symbol, signal]) => (
+              <div
+                key={symbol}
+                className={`relative rounded-lg border-2 p-4 transition-all duration-300 hover:shadow-lg ${getSignalColor(signal.type)} ${
+                  signal.strength === 'CRITICAL' ? 'ring-2 ring-red-400/50 animate-pulse' : ''
+                }`}
+              >
+                {/* Signal Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="relative">
+                      <div className={`absolute inset-0 rounded-full animate-pulse ${
+                        signal.type === 'CALL' ? 'bg-green-500/20' :
+                        signal.type === 'PUT' ? 'bg-red-500/20' :
+                        signal.type === 'MATCH' ? 'bg-blue-500/20' : 'bg-yellow-500/20'
+                      }`}></div>
+                      <div className="relative p-1 rounded-full bg-gray-700/50">
+                        {getSignalIcon(signal.type)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-white font-bold text-sm">{symbol}</div>
+                      <div className="text-xs text-gray-400">{signal.type}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right">
+                    <div className={`text-sm font-bold ${getStrengthColor(signal.strength)}`}>
+                      {signal.confidence}%
+                    </div>
+                    <div className="text-xs text-gray-400">{signal.strength}</div>
+                  </div>
+                </div>
+                
+                {/* Technical Indicators */}
+                <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+                  <div className="bg-gray-700/30 rounded p-2">
+                    <div className="text-gray-400">RSI</div>
+                    <div className={`font-bold ${
+                      signal.indicators.rsi < 30 ? 'text-green-400' : 
+                      signal.indicators.rsi > 70 ? 'text-red-400' : 'text-gray-300'
+                    }`}>
+                      {signal.indicators.rsi}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-700/30 rounded p-2">
+                    <div className="text-gray-400">MACD</div>
+                    <div className={`font-bold text-xs capitalize ${
+                      signal.indicators.macd === 'bullish' ? 'text-green-400' :
+                      signal.indicators.macd === 'bearish' ? 'text-red-400' : 'text-gray-300'
+                    }`}>
+                      {signal.indicators.macd}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Entry Price and Countdown */}
+                <div className="flex justify-between items-center text-xs">
+                  <div>
+                    <span className="text-gray-400">Entry:</span>
+                    <span className="text-white font-mono ml-1">{signal.entry.toFixed(4)}</span>
+                  </div>
+                  <div className="text-yellow-400 font-mono">
+                    {formatCountdown(Math.max(0, aiCountdown))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-20 h-20 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full animate-pulse"></div>
+              </div>
+              <div className="relative flex items-center justify-center">
+                <BarChart3 className="h-12 w-12 text-blue-400 opacity-60" />
+                <div className="absolute -top-2 -right-2">
+                  <Zap className="h-5 w-5 text-yellow-400 animate-bounce" />
+                </div>
+              </div>
+            </div>
+            <h4 className="text-xl font-semibold text-white mb-2">
+              {isInitializing ? 'Initializing Multi-Asset Analysis' : 
+               analysisStatus === 'analyzing' ? 'AI Analyzing Multiple Assets' :
+               'Ready for Multi-Asset Analysis'}
+            </h4>
+            <p className="text-gray-400 mb-4">
+              {isInitializing ? 'Setting up analysis for all trading assets...' :
+               analysisStatus === 'analyzing' ? `Analyzing ${analyzedAssets.length} assets simultaneously...` :
+               `Start ${signalDuration}-minute analysis across all assets`}
+            </p>
+            {!aiRecommendation && !isInitializing && analysisStatus !== 'analyzing' && (
+              <button
+                onClick={performAnalysis}
+                disabled={aiRecommendation && aiCountdown > 0}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              >
+                Start Multi-Asset Analysis
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+
+      {/* AI Recommendation Section */}
+      <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-xl border border-gray-600 shadow-2xl overflow-hidden">
         {/* Account List - Show if multiple accounts available */}
         {accountList && accountList.length > 1 && (
           <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600 mb-4">
@@ -687,7 +824,6 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
             </div>
           </div>
         )}
-      </div>
 
       {/* Content Section */}
       <div className="p-6">
@@ -710,8 +846,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
                   }`} />
                 </div>
                 <div>
-                  <h4 className="text-lg font-semibold text-white mb-1">
-                    AI Recommendation - {aiRecommendation.action}
+                  <h4 className="text-xl font-semibold text-white mb-1">
+                    Multi-Asset AI Recommendation - {aiRecommendation.action}
                   </h4>
                   <p className="text-sm text-gray-300 max-w-md">{aiRecommendation.reasoning}</p>
                 </div>
@@ -751,7 +887,7 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
           </div>
         )}
 
-        {signals.length === 0 ? (
+        {!aiRecommendation && Object.keys(multiAssetSignals).length === 0 ? (
           <div className="text-center py-16">
             <div className="relative mb-8">
               <div className="absolute inset-0 flex items-center justify-center">
@@ -814,135 +950,8 @@ const TradingSignals: React.FC<TradingSignalsProps> = ({ selectedAsset }) => {
               </div>
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {signals.map((signal) => (
-              <div
-                key={signal.id}
-                className={`relative rounded-xl border-2 p-6 transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${getSignalColor(signal.type)} ${
-                  signal.strength === 'CRITICAL' ? 'ring-2 ring-red-400/50 animate-pulse' : ''
-                }`}
-              >
-                {/* Signal Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                      <div className={`absolute inset-0 rounded-full animate-pulse ${
-                        signal.type === 'CALL' ? 'bg-green-500/20' :
-                        signal.type === 'PUT' ? 'bg-red-500/20' :
-                        signal.type === 'MATCH' ? 'bg-blue-500/20' : 'bg-yellow-500/20'
-                      }`}></div>
-                      <div className="relative p-2 rounded-full bg-gray-700/50">
-                        {getSignalIcon(signal.type)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-3 mb-1">
-                        <span className="text-xl font-bold text-white">{signal.symbol}</span>
-                        <span className="px-3 py-1 bg-gray-700 rounded-full text-sm font-medium text-white">
-                          {signal.type}
-                        </span>
-                        {signal.isLive && (
-                          <div className="flex items-center space-x-2">
-                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                            <span className="text-xs text-green-400 font-medium">LIVE</span>
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-gray-300 text-sm leading-relaxed max-w-md">{signal.reasoning}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    <div className={`text-lg font-bold mb-1 ${getStrengthColor(signal.strength)}`}>
-                      {signal.strength}
-                      {signal.strength === 'CRITICAL' && <AlertCircle className="inline h-4 w-4 ml-1" />}
-                    </div>
-                    <div className="text-2xl font-bold text-white mb-1">{signal.confidence}%</div>
-                    <div className="text-sm text-yellow-400 font-mono bg-gray-700/50 px-2 py-1 rounded">
-                      {(() => {
-                        const remaining = Math.max(0, aiCountdown);
-                        return formatCountdown(remaining);
-                      })()}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      {signalDuration}min hold
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Technical Indicators Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600">
-                    <div className="text-xs text-gray-400 mb-1">RSI</div>
-                    <div className={`text-lg font-bold ${
-                      signal.indicators.rsi < 30 ? 'text-green-400' : 
-                      signal.indicators.rsi > 70 ? 'text-red-400' : 'text-gray-300'
-                    }`}>
-                      {signal.indicators.rsi}
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600">
-                    <div className="text-xs text-gray-400 mb-1">MACD</div>
-                    <div className={`text-sm font-medium capitalize ${
-                      signal.indicators.macd === 'bullish' ? 'text-green-400' :
-                      signal.indicators.macd === 'bearish' ? 'text-red-400' : 'text-gray-300'
-                    }`}>
-                      {signal.indicators.macd}
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600">
-                    <div className="text-xs text-gray-400 mb-1">Bollinger</div>
-                    <div className={`text-sm font-medium capitalize ${
-                      signal.indicators.bollinger === 'squeeze' ? 'text-yellow-400' :
-                      signal.indicators.bollinger === 'expansion' ? 'text-blue-400' : 'text-gray-300'
-                    }`}>
-                      {signal.indicators.bollinger}
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600">
-                    <div className="text-xs text-gray-400 mb-1">Volume</div>
-                    <div className={`text-sm font-medium capitalize ${
-                      signal.indicators.volume === 'high' ? 'text-green-400' :
-                      signal.indicators.volume === 'normal' ? 'text-gray-300' : 'text-red-400'
-                    }`}>
-                      {signal.indicators.volume}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Signal Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-600">
-                  <div className="flex items-center space-x-6 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-gray-400">Entry:</span>
-                      <span className="text-white font-mono">{signal.entry.toFixed(4)}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-gray-400">Expiry:</span>
-                      <span className="text-white font-medium">{signal.expiry}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-gray-400">Trend:</span>
-                      <span className={`capitalize font-medium ${
-                        signal.priceAction.trend === 'uptrend' ? 'text-green-400' :
-                        signal.priceAction.trend === 'downtrend' ? 'text-red-400' : 'text-gray-300'
-                      }`}>
-                        {signal.priceAction.trend}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(signal.timestamp).toLocaleTimeString()}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         )}
+      </div>
       </div>
     </div>
   );

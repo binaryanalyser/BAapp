@@ -68,7 +68,7 @@ class DerivAPI {
   private balanceListeners: Array<(data: any) => void> = [];
   private subscriptions = new Map<string, string>(); // symbol -> subscription_id
   private readonly APP_ID = '89440';
-  private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${this.APP_ID}`;
+  private readonly WS_URL = "wss://ws.derivws.com/websockets/v3?app_id=89440";
   private requestCallbacks = new Map<number, { resolve: Function; reject: Function; timeout: NodeJS.Timeout }>();
   private requestId = 1;
   private reconnectAttempts = 0;

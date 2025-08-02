@@ -258,7 +258,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'DIFFERS',
         confidence: Math.min((100 - matchRate) + 10, 85),
-        reasoning: `Strong differ pattern. Next tick likely ${predictedDigit} (most frequent alternative).`,
+        reasoning: `Strong differ pattern. Next tick less likely ${predictedDigit} (most unfrequent number).`,
         expectedDigit: predictedDigit,
         color: 'text-red-400',
         icon: Target

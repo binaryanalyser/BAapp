@@ -11,56 +11,129 @@ const OAuthCallback: React.FC = () => {
   useEffect(() => {
     const handleOAuthCallback = async () => {
       try {
-        console.log('=== OAuth Callback Debug Info ===');
-        console.log('OAuth callback - Full URL:', window.location.href);
-        console.log('OAuth callback - Hash:', window.location.hash);
-        console.log('OAuth callback - Search:', window.location.search);
-        console.log('OAuth callback - Pathname:', window.location.pathname);
-        console.log('OAuth callback - Origin:', window.location.origin);
+        console.log('=== DETAILED OAuth Callback Debug Info ===');
+        console.log('Full URL:', window.location.href);
+        console.log('Protocol:', window.location.protocol);
+        console.log('Host:', window.location.host);
+        console.log('Pathname:', window.location.pathname);
+        console.log('Search:', window.location.search);
+        console.log('Hash:', window.location.hash);
+        console.log('Location state:', location.state);
+        console.log('Location search:', location.search);
+        console.log('Location hash:', location.hash);
         
-        // Try to get token from hash first (OAuth 2.0 implicit flow)
+        // Parse all possible parameter sources
         let token = null;
         let error = null;
         let errorDescription = null;
         
-        if (window.location.hash) {
-          const hash = window.location.hash.substring(1);
-          const hashParams = new URLSearchParams(hash);
-          token = hashParams.get('access_token') || hashParams.get('token');
+        // Method 1: Parse hash parameters (most common for OAuth implicit flow)
+        const hash = window.location.hash;
+        if (hash) {
+          console.log('Parsing hash:', hash);
+          const hashWithoutSymbol = hash.startsWith('#') ? hash.substring(1) : hash;
+          const hashParams = new URLSearchParams(hashWithoutSymbol);
+          
+          // Log all hash parameters
+          console.log('Hash parameters:');
+          for (const [key, value] of hashParams.entries()) {
+            console.log(`  ${key}: ${key.toLowerCase().includes('token') ? value.substring(0, 10) + '...' : value}`);
+          }
+          
+          token = hashParams.get('access_token') || hashParams.get('token') || hashParams.get('oauth_token');
           error = hashParams.get('error');
           errorDescription = hashParams.get('error_description');
-          console.log('Hash params:', { token: token ? 'present' : 'missing', error, errorDescription });
         }
         
-        // Fallback to query parameters
-        if (!token && !error) {
-          const searchParams = new URLSearchParams(window.location.search);
-          token = searchParams.get('access_token') || searchParams.get('token');
+        // Method 2: Parse query parameters (fallback)
+        const search = window.location.search;
+        if (search && !token && !error) {
+          console.log('Parsing search params:', search);
+          const searchParams = new URLSearchParams(search);
+          
+          // Log all search parameters
+          console.log('Search parameters:');
+          for (const [key, value] of searchParams.entries()) {
+            console.log(`  ${key}: ${key.toLowerCase().includes('token') ? value.substring(0, 10) + '...' : value}`);
+          }
+          
+          token = searchParams.get('access_token') || searchParams.get('token') || searchParams.get('oauth_token');
           error = searchParams.get('error');
           errorDescription = searchParams.get('error_description');
-          console.log('Search params:', { token: token ? 'present' : 'missing', error, errorDescription });
         }
         
-        // Additional fallback - check if there's any token-like parameter
+        // Method 3: Manual parsing for edge cases
         if (!token && !error) {
-          const allParams = new URLSearchParams(window.location.hash.substring(1));
-          for (const [key, value] of allParams.entries()) {
-            console.log('Hash param:', key, '=', value);
-            if (key.includes('token') || key.includes('access')) {
+          console.log('Trying manual parsing...');
+          
+          // Parse hash manually
+          if (hash) {
+            const hashParts = hash.substring(1).split('&');
+            for (const part of hashParts) {
+              const [key, value] = part.split('=');
+              if (key && value && (key === 'access_token' || key === 'token' || key === 'oauth_token')) {
+                token = decodeURIComponent(value);
+                console.log('Found token via manual hash parsing:', key);
+                break;
+              }
+            }
+          }
+          
+          // Parse search manually
+          if (!token && search) {
+            const searchParts = search.substring(1).split('&');
+            for (const part of searchParts) {
+              const [key, value] = part.split('=');
+              if (key && value && (key === 'access_token' || key === 'token' || key === 'oauth_token')) {
+                token = decodeURIComponent(value);
+                console.log('Found token via manual search parsing:', key);
+                break;
+              }
+            }
+          }
+        }
+        
+        // Method 4: Check for any parameter that looks like a token
+        if (!token && !error) {
+          console.log('Checking for any token-like parameters...');
+          const allHashParams = new URLSearchParams(hash.substring(1));
+          const allSearchParams = new URLSearchParams(search);
+          
+          // Check hash params
+          for (const [key, value] of allHashParams.entries()) {
+            if ((key.toLowerCase().includes('token') || key.toLowerCase().includes('access')) && value.length > 10) {
               token = value;
+              console.log('Found token-like parameter in hash:', key);
               break;
+            }
+          }
+          
+          // Check search params
+          if (!token) {
+            for (const [key, value] of allSearchParams.entries()) {
+              if ((key.toLowerCase().includes('token') || key.toLowerCase().includes('access')) && value.length > 10) {
+                token = value;
+                console.log('Found token-like parameter in search:', key);
+                break;
+              }
             }
           }
         }
 
+        console.log('=== Final Results ===');
+        console.log('Token found:', token ? 'YES (length: ' + token.length + ')' : 'NO');
+        console.log('Error found:', error || 'NO');
+        console.log('Error description:', errorDescription || 'NO');
+
         if (error) {
           console.error('OAuth error:', error, errorDescription);
-          navigate('/login?error=' + encodeURIComponent(errorDescription || error), { replace: true });
+          const errorMsg = errorDescription || error;
+          navigate('/login?error=' + encodeURIComponent(errorMsg), { replace: true });
           return;
         }
 
         if (token) {
-          console.log('Token received, attempting login...', token.substring(0, 10) + '...');
+          console.log('Token received, attempting login... Token preview:', token.substring(0, 15) + '...');
           await login(token);
           console.log('Login successful, redirecting...');
           
@@ -70,7 +143,7 @@ const OAuthCallback: React.FC = () => {
           navigate(redirectUrl, { replace: true });
         } else {
           console.error('No token received in OAuth callback');
-          navigate('/login?error=' + encodeURIComponent('No authentication token received. Please try again.'), { replace: true });
+          navigate('/login?error=' + encodeURIComponent('No authentication token received. Please check browser console for details.'), { replace: true });
         }
       } catch (err) {
         console.error('OAuth callback error:', err);

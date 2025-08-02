@@ -14,11 +14,15 @@ const Login: React.FC = () => {
   const handleDerivLogin = () => {
     // Store current URL for redirect after OAuth
     localStorage.setItem('oauth_redirect_url', window.location.origin + '/');
-    const redirectUri = window.location.origin + '/oauth-callback';
-    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&l=EN&brand=deriv&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token`;
+    const redirectUri = `${window.location.origin}/oauth-callback`;
+    
+    // Try multiple OAuth configurations
+    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&l=EN&brand=deriv&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=read,trade`;
     
     console.log('OAuth Redirect URI:', redirectUri);
     console.log('Full OAuth URL:', authUrl);
+    console.log('Current origin:', window.location.origin);
+    
     window.location.href = authUrl;
   };
 

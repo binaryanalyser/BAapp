@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, TrendingUp, TrendingDown } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Wifi, WifiOff } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 
 interface LiveTicksProps {
@@ -7,16 +7,10 @@ interface LiveTicksProps {
 }
 
 interface TickData {
-  id: string;
   symbol: string;
-  tick: number;
+  price: number;
   epoch: number;
-  quote: number;
-}
-
-interface HistoryData {
-  times: number[];
-  prices: number[];
+  pip: number;
 }
 
 interface ChartDataPoint {
@@ -25,243 +19,343 @@ interface ChartDataPoint {
   timestamp: number;
 }
 
+interface DigitStats {
+  digit: number;
+  count: number;
+  percentage: number;
+}
+
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const [selectedSymbol, setSelectedSymbol] = useState('R_10');
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   const [currentTick, setCurrentTick] = useState<TickData | null>(null);
-  const [digits, setDigits] = useState<number[]>(Array(20).fill(0));
+  const [recentDigits, setRecentDigits] = useState<number[]>([]);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
-  const [prices, setPrices] = useState<number[]>([]);
+  const [digitHistory, setDigitHistory] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  const [hasReceivedData, setHasReceivedData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const wsRef = useRef<WebSocket | null>(null);
-  // Tab state
-  const [activeCategory, setActiveCategory] = useState('volatility');
-  
   const subscriptionIdRef = useRef<string | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Extended digit history for analysis (up to 100+ digits)
-  const [digitHistory, setDigitHistory] = useState<number[]>([]);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 5;
 
+  // Volatility indices configuration
   const volatilityIndices = [
-    { symbol: 'R_10', label: '10', name: 'Volatility 10', decimals: 3 },
-    { symbol: 'R_25', label: '25', name: 'Volatility 25', decimals: 3 },
-    { symbol: 'R_50', label: '50', name: 'Volatility 50', decimals: 3 },
-    { symbol: 'R_75', label: '75', name: 'Volatility 75', decimals: 3 },
-    { symbol: 'R_100', label: '100', name: 'Volatility 100', decimals: 2 }
+    { symbol: 'R_10', label: 'Vol 10', name: 'Volatility 10 Index', pip: 0.001 },
+    { symbol: 'R_25', label: 'Vol 25', name: 'Volatility 25 Index', pip: 0.001 },
+    { symbol: 'R_50', label: 'Vol 50', name: 'Volatility 50 Index', pip: 0.0001 },
+    { symbol: 'R_75', label: 'Vol 75', name: 'Volatility 75 Index', pip: 0.0001 },
+    { symbol: 'R_100', label: 'Vol 100', name: 'Volatility 100 Index', pip: 0.01 }
   ];
 
-  const categories = [
-    { id: 'volatility', label: 'VOLATILITY INDICES' },
-    { id: 'oddeven', label: 'ODD/EVEN' },
-    { id: 'matchdiffers', label: 'MATCH/DIFFERS' }
-  ];
-
-  const getDecimalPlaces = (symbol: string) => {
-    const index = volatilityIndices.find(vi => vi.symbol === symbol);
-    return index?.decimals || 4;
+  // Get configuration for a symbol
+  const getSymbolConfig = (symbol: string) => {
+    return volatilityIndices.find(vi => vi.symbol === symbol) || volatilityIndices[0];
   };
 
-  const getLastDigit = (price: number, decimals: number) => {
+  // Extract last digit from price
+  const getLastDigit = (price: number, pip: number): number => {
     if (typeof price !== 'number' || isNaN(price)) {
+      console.warn('Invalid price for digit extraction:', price);
       return 0;
     }
-    // For all volatility indices, we want the last digit of the price
-    // Convert to string with appropriate decimal places and get the last character
-    const priceStr = price.toFixed(decimals);
-    const lastChar = priceStr.slice(-1);
-    const digit = parseInt(lastChar);
-    
-    // If the last character is not a digit (shouldn't happen), return 0
-    return isNaN(digit) ? 0 : digit;
+
+    try {
+      // Determine decimal places based on pip
+      let decimalPlaces = 0;
+      if (pip === 0.01) decimalPlaces = 2;
+      else if (pip === 0.001) decimalPlaces = 3;
+      else if (pip === 0.0001) decimalPlaces = 4;
+      else decimalPlaces = 5;
+
+      // Format price and extract last digit
+      const priceStr = price.toFixed(decimalPlaces);
+      const lastChar = priceStr.slice(-1);
+      const digit = parseInt(lastChar);
+      
+      console.log(`Price: ${price}, Formatted: ${priceStr}, Last digit: ${digit}`);
+      return isNaN(digit) ? 0 : digit;
+    } catch (error) {
+      console.error('Error extracting digit:', error);
+      return 0;
+    }
   };
 
+  // WebSocket connection management
   const connectWebSocket = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log('WebSocket already connected');
       return;
     }
 
     setConnectionStatus('connecting');
-    console.log('Connecting to WebSocket...');
+    setError(null);
+    console.log('Connecting to Deriv WebSocket...');
     
-    wsRef.current = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089&l=EN');
-    
-    wsRef.current.onopen = () => {
-      console.log('WebSocket connected');
-      setIsConnected(true);
-      setConnectionStatus('connected');
-      setReconnectAttempts(0);
-      subscribeTo(selectedSymbol);
-    };
-
-    wsRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log('WebSocket message:', data);
+    try {
+      wsRef.current = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
       
-      if (data.tick && data.echo_req?.ticks === selectedSymbol) {
-        console.log('Received tick for', selectedSymbol, ':', data.tick.tick);
-        const tickData: TickData = {
-          id: data.tick.id,
-          symbol: data.tick.symbol,
-          tick: data.tick.tick,
-          epoch: data.tick.epoch,
-          quote: data.tick.quote
-        };
+      wsRef.current.onopen = () => {
+        console.log('✅ WebSocket connected successfully');
+        setIsConnected(true);
+        setConnectionStatus('connected');
+        setError(null);
+        reconnectAttemptsRef.current = 0;
         
-        setCurrentTick(tickData);
-        subscriptionIdRef.current = data.tick.id;
-        
-        // Request tick history only once when we first get a tick
-        if (prices.length === 0) {
-          console.log('Requesting tick history for', selectedSymbol);
-          wsRef.current?.send(JSON.stringify({
-            ticks_history: selectedSymbol,
-            end: 'latest',
-            start: 1,
-            style: 'ticks',
-            count: 101,
-            req_id: Math.floor(Math.random() * 1000000)
-          }));
-        }
-        
-        // Update live data immediately
-        const decimals = getDecimalPlaces(selectedSymbol);
-        const newDigit = getLastDigit(data.tick.tick, decimals);
-        
-        console.log(`Processing tick for ${selectedSymbol}: price=${data.tick.tick}, decimals=${decimals}, digit=${newDigit}`);
-        
-        setHasReceivedData(true);
-        setDigits(prev => [...prev.slice(1), newDigit]);
-        setDigitHistory(prev => [...prev, newDigit].slice(-100)); // Keep last 100 digits
-        setPrices(prev => [...prev.slice(-19), data.tick.tick]);
-        setChartData(prev => [...prev.slice(-19), {
-          time: data.tick.epoch * 1000,
-          price: data.tick.tick,
-          timestamp: data.tick.epoch
-        }]);
-      }
+        // Subscribe to selected symbol
+        subscribeToSymbol(selectedSymbol);
+      };
 
-      if (data.history && data.echo_req?.ticks_history === selectedSymbol) {
-        console.log('Received history for', selectedSymbol, ':', data.history);
-        const history: HistoryData = data.history;
-        const decimals = getDecimalPlaces(selectedSymbol);
-        
-        console.log(`Processing history for ${selectedSymbol}: ${history.prices.length} prices, decimals=${decimals}`);
-        
-        // Process history data
-        const newPrices: number[] = [];
-        const newDigits: number[] = [];
-        const newDigitHistory: number[] = [];
-        const newChartData: ChartDataPoint[] = [];
-        
-        const displayLength = Math.min(20, history.prices.length);
-        const historyLength = Math.min(100, history.prices.length);
-        
-        // Process full history for analysis
-        for (let i = 0; i < historyLength; i++) {
-          const price = parseFloat(history.prices[history.prices.length - historyLength + i]);
-          const digit = getLastDigit(price, decimals);
-          newDigitHistory.push(digit);
+      wsRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleWebSocketMessage(data);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
         }
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        setConnectionStatus('error');
+        setError('Connection error occurred');
+      };
+
+      wsRef.current.onclose = (event) => {
+        console.log('🔌 WebSocket closed:', event.code, event.reason);
+        setIsConnected(false);
+        setConnectionStatus('disconnected');
         
-        // Process recent data for display
-        for (let i = 0; i < displayLength; i++) {
-          const price = parseFloat(history.prices[history.prices.length - displayLength + i]);
-          const time = history.times[history.times.length - displayLength + i];
-          const digit = getLastDigit(price, decimals);
+        // Auto-reconnect if not a clean close
+        if (event.code !== 1000 && reconnectAttemptsRef.current < maxReconnectAttempts) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+          console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
           
-          newPrices.push(price);
-          newDigits.push(digit);
-          newChartData.push({
-            time: time * 1000,
-            price: price,
-            timestamp: time
-          });
-          
-          // Debug log for first few prices
-          if (i < 3) {
-            console.log(`History price ${i}: ${price} -> digit: ${digit}`);
-          }
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttemptsRef.current++;
+            connectWebSocket();
+          }, delay);
+        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+          setError('Maximum reconnection attempts reached');
         }
-        
-        setPrices(newPrices);
-        setDigits(newDigits);
-        setDigitHistory(newDigitHistory);
-        setChartData(newChartData);
-        setHasReceivedData(true);
-        setIsLoading(false);
-        console.log(`History processed for ${selectedSymbol}, loading complete. Digits:`, newDigits.slice(-5));
-      }
-
-      // Handle subscription confirmation
-      if (data.subscription && data.subscription.id) {
-        console.log('Subscription confirmed:', data.subscription.id);
-        subscriptionIdRef.current = data.subscription.id;
-      }
-
-      // Handle errors
-      if (data.error) {
-        console.error('WebSocket error:', data.error);
-        if (data.error.code === 'InvalidSymbol') {
-          console.log('Invalid symbol, trying alternative...');
-          // Try with frx prefix for some symbols
-          const altSymbol = selectedSymbol.startsWith('frx') ? selectedSymbol.slice(3) : `frx${selectedSymbol}`;
-          setTimeout(() => subscribeTo(altSymbol), 1000);
-        }
-      }
-    };
-
-    wsRef.current.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason);
-      setIsConnected(false);
-      setConnectionStatus('disconnected');
-      
-      // Reconnect with exponential backoff
-      if (reconnectAttempts < 5) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-        console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1})`);
-        
-        reconnectTimeoutRef.current = setTimeout(() => {
-          setReconnectAttempts(prev => prev + 1);
-          connectWebSocket();
-        }, delay);
-      }
-    };
-
-    wsRef.current.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setIsConnected(false);
-      setConnectionStatus('disconnected');
-    };
-  };
-
-  const subscribeTo = (symbol: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      // Unsubscribe from previous symbol
-      if (subscriptionIdRef.current) {
-        console.log('Unsubscribing from previous symbol');
-        wsRef.current?.send(JSON.stringify({
-          forget: subscriptionIdRef.current
-        }));
-        subscriptionIdRef.current = null;
-      }
-      
-      // Subscribe to new symbol
-      console.log('Subscribing to', symbol);
-      wsRef.current.send(JSON.stringify({
-        ticks: symbol,
-        subscribe: 1,
-        req_id: Math.floor(Math.random() * 1000000)
-      }));
-    } else {
-      console.log('WebSocket not ready, cannot subscribe to', symbol);
+      };
+    } catch (error) {
+      console.error('Failed to create WebSocket connection:', error);
+      setConnectionStatus('error');
+      setError('Failed to establish connection');
     }
   };
 
+  // Handle WebSocket messages
+  const handleWebSocketMessage = (data: any) => {
+    console.log('📨 WebSocket message:', data);
+
+    // Handle errors
+    if (data.error) {
+      console.error('API Error:', data.error);
+      setError(`API Error: ${data.error.message}`);
+      return;
+    }
+
+    // Handle tick data
+    if (data.tick && data.tick.symbol === selectedSymbol) {
+      console.log('📊 Received tick for', selectedSymbol, ':', data.tick);
+      
+      const config = getSymbolConfig(selectedSymbol);
+      const tickData: TickData = {
+        symbol: data.tick.symbol,
+        price: data.tick.quote,
+        epoch: data.tick.epoch,
+        pip: config.pip
+      };
+
+      setCurrentTick(tickData);
+      
+      // Store subscription ID
+      if (data.subscription?.id) {
+        subscriptionIdRef.current = data.subscription.id;
+        console.log('💾 Stored subscription ID:', data.subscription.id);
+      }
+
+      // Extract last digit
+      const lastDigit = getLastDigit(tickData.price, config.pip);
+      
+      // Update digits arrays
+      setRecentDigits(prev => {
+        const newDigits = [...prev, lastDigit].slice(-20); // Keep last 20 digits
+        console.log('🔢 Updated recent digits:', newDigits);
+        return newDigits;
+      });
+      
+      setDigitHistory(prev => [...prev, lastDigit].slice(-100)); // Keep last 100 for analysis
+      
+      // Update chart data
+      setChartData(prev => {
+        const newPoint: ChartDataPoint = {
+          time: data.tick.epoch * 1000,
+          price: tickData.price,
+          timestamp: data.tick.epoch
+        };
+        return [...prev, newPoint].slice(-50); // Keep last 50 points
+      });
+
+      // Request history if we don't have enough data
+      if (recentDigits.length === 0) {
+        requestTickHistory(selectedSymbol);
+      }
+
+      setIsLoading(false);
+    }
+
+    // Handle tick history
+    if (data.history && data.echo_req?.ticks_history === selectedSymbol) {
+      console.log('📈 Received history for', selectedSymbol, ':', data.history);
+      processTickHistory(data.history);
+    }
+
+    // Handle subscription confirmation
+    if (data.subscription) {
+      console.log('✅ Subscription confirmed:', data.subscription);
+      subscriptionIdRef.current = data.subscription.id;
+    }
+  };
+
+  // Process tick history data
+  const processTickHistory = (history: any) => {
+    if (!history.prices || !history.times) {
+      console.warn('Invalid history data received');
+      return;
+    }
+
+    const config = getSymbolConfig(selectedSymbol);
+    const prices = history.prices.map((p: string) => parseFloat(p));
+    const times = history.times;
+
+    console.log(`📊 Processing ${prices.length} historical prices for ${selectedSymbol}`);
+
+    // Process recent digits (last 20)
+    const recentPrices = prices.slice(-20);
+    const newRecentDigits = recentPrices.map(price => getLastDigit(price, config.pip));
+    setRecentDigits(newRecentDigits);
+
+    // Process digit history (last 100)
+    const historyPrices = prices.slice(-100);
+    const newDigitHistory = historyPrices.map(price => getLastDigit(price, config.pip));
+    setDigitHistory(newDigitHistory);
+
+    // Process chart data (last 50)
+    const chartPrices = prices.slice(-50);
+    const chartTimes = times.slice(-50);
+    const newChartData: ChartDataPoint[] = chartPrices.map((price, index) => ({
+      time: chartTimes[index] * 1000,
+      price: price,
+      timestamp: chartTimes[index]
+    }));
+    setChartData(newChartData);
+
+    console.log('✅ History processed successfully');
+    setIsLoading(false);
+  };
+
+  // Subscribe to a symbol
+  const subscribeToSymbol = (symbol: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('Cannot subscribe: WebSocket not ready');
+      return;
+    }
+
+    console.log('📡 Subscribing to', symbol);
+    
+    const request = {
+      ticks: symbol,
+      subscribe: 1,
+      req_id: Date.now()
+    };
+
+    wsRef.current.send(JSON.stringify(request));
+  };
+
+  // Unsubscribe from current symbol
+  const unsubscribeFromSymbol = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !subscriptionIdRef.current) {
+      return;
+    }
+
+    console.log('🚫 Unsubscribing from subscription:', subscriptionIdRef.current);
+    
+    const request = {
+      forget: subscriptionIdRef.current,
+      req_id: Date.now()
+    };
+
+    wsRef.current.send(JSON.stringify(request));
+    subscriptionIdRef.current = null;
+  };
+
+  // Request tick history
+  const requestTickHistory = (symbol: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    console.log('📚 Requesting tick history for', symbol);
+    
+    const request = {
+      ticks_history: symbol,
+      end: 'latest',
+      start: 1,
+      style: 'ticks',
+      count: 100,
+      req_id: Date.now()
+    };
+
+    wsRef.current.send(JSON.stringify(request));
+  };
+
+  // Handle symbol change
+  const handleSymbolChange = (symbol: string) => {
+    if (symbol === selectedSymbol) return;
+
+    console.log('🔄 Changing symbol from', selectedSymbol, 'to', symbol);
+    
+    // Unsubscribe from current symbol
+    unsubscribeFromSymbol();
+    
+    // Reset state
+    setSelectedSymbol(symbol);
+    setCurrentTick(null);
+    setRecentDigits([]);
+    setDigitHistory([]);
+    setChartData([]);
+    setIsLoading(true);
+    setError(null);
+    
+    // Subscribe to new symbol
+    if (isConnected) {
+      setTimeout(() => subscribeToSymbol(symbol), 100);
+    }
+  };
+
+  // Calculate digit statistics
+  const calculateDigitStats = (): DigitStats[] => {
+    if (digitHistory.length === 0) return [];
+
+    const counts = Array(10).fill(0);
+    digitHistory.forEach(digit => counts[digit]++);
+
+    return counts.map((count, digit) => ({
+      digit,
+      count,
+      percentage: (count / digitHistory.length) * 100
+    })).sort((a, b) => b.count - a.count);
+  };
+
+  const digitStats = calculateDigitStats();
+
+  // Initialize WebSocket connection
   useEffect(() => {
     connectWebSocket();
     
@@ -270,393 +364,276 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close(1000, 'Component unmounting');
       }
     };
   }, []);
 
+  // Handle symbol changes
   useEffect(() => {
     if (isConnected) {
-      setIsLoading(true);
-      setHasReceivedData(false);
-      setDigits([]);
-      setDigitHistory([]);
-      setChartData([]);
-      setPrices([]);
-      setCurrentTick(null);
-      console.log(`Switching to symbol: ${selectedSymbol}`);
-      subscribeTo(selectedSymbol);
+      handleSymbolChange(selectedSymbol);
     }
   }, [selectedSymbol, isConnected]);
 
-  const handleSymbolChange = (symbol: string) => {
-    console.log('Changing symbol to:', symbol);
-    setSelectedSymbol(symbol);
-  };
-
-  const getDigitColor = (digit: number, index: number) => {
-    const isEven = digit % 2 === 0;
-    const isRecent = index >= 15; // Last 5 digits are more prominent
-    
-    if (isRecent) {
-      return isEven ? 'bg-blue-500 text-white shadow-lg' : 'bg-red-500 text-white shadow-lg';
-    } else {
-      return isEven ? 'bg-blue-400 text-white' : 'bg-red-400 text-white';
-    }
-  };
-
-  const getPriceMovement = (index: number) => {
-    if (index === 0 || prices.length < 2) return 'none';
-    const current = prices[index];
-    const previous = prices[index - 1];
-    
-    if (current > previous) return 'up';
-    if (current < previous) return 'down';
-    return 'none';
-  };
-
-  // Digit analysis functions
-  const analyzeDigits = () => {
-    if (digitHistory.length === 0) return null;
-    
-    const digitCounts = Array(10).fill(0);
-    digitHistory.forEach(digit => digitCounts[digit]++);
-    
-    const maxCount = Math.max(...digitCounts);
-    const minCount = Math.min(...digitCounts);
-    
-    const hottestNumbers = digitCounts
-      .map((count, digit) => ({ digit, count }))
-      .filter(item => item.count === maxCount)
-      .map(item => item.digit);
-    
-    const coldestNumbers = digitCounts
-      .map((count, digit) => ({ digit, count }))
-      .filter(item => item.count === minCount)
-      .map(item => item.digit);
-    
-    const evenCount = digitHistory.filter(d => d % 2 === 0).length;
-    const oddCount = digitHistory.filter(d => d % 2 === 1).length;
-    
-    return {
-      hottestNumbers,
-      coldestNumbers,
-      hottestCount: maxCount,
-      coldestCount: minCount,
-      evenCount,
-      oddCount,
-      totalCount: digitHistory.length,
-      digitCounts
-    };
-  };
-
-  const analysis = analyzeDigits();
-
-  const getMovementClass = (movement: string) => {
-    switch (movement) {
-      case 'up':
-        return 'border-2 border-green-400';
-      case 'down':
-        return 'border-2 border-red-400';
+  // Get connection status display
+  const getConnectionDisplay = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return { icon: Wifi, color: 'text-green-400', text: 'Connected' };
+      case 'connecting':
+        return { icon: Activity, color: 'text-yellow-400', text: 'Connecting...' };
+      case 'disconnected':
+        return { icon: WifiOff, color: 'text-red-400', text: 'Disconnected' };
+      case 'error':
+        return { icon: WifiOff, color: 'text-red-400', text: 'Error' };
       default:
-        return '';
+        return { icon: Activity, color: 'text-gray-400', text: 'Unknown' };
     }
   };
 
-  const currentPrice = currentTick?.tick || 0;
-  const decimals = getDecimalPlaces(selectedSymbol);
-  const currentDigit = currentPrice ? getLastDigit(currentPrice, decimals) : 0;
-  
-  // Get content based on active category
-  const getCategoryContent = () => {
-    switch (activeCategory) {
-      case 'volatility':
-        return (
-          <div className="flex space-x-1 mb-6 bg-gray-700 rounded-lg p-1">
-            {volatilityIndices.map((index) => (
-              <button
-                key={index.symbol}
-                onClick={() => setSelectedSymbol(index.symbol)}
-                className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                  selectedSymbol === index.symbol
-                    ? 'bg-gray-900 text-white border border-gray-500'
-                    : 'text-gray-300 hover:text-white hover:bg-gray-600'
-                }`}
-              >
-                {index.label}
-              </button>
-            ))}
-          </div>
-        );
-      
-      case 'oddeven':
-        return (
-          <div className="mb-6">
-            <div className="bg-gray-700 rounded-lg p-4 mb-4">
-              <h4 className="text-white font-medium mb-3">Odd/Even Analysis</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-4 bg-blue-600/20 rounded-lg border border-blue-500">
-                  <div className="text-2xl font-bold text-blue-400">
-                    {analysis ? analysis.evenCount : 0}
-                  </div>
-                  <div className="text-sm text-blue-300">Even Numbers</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {analysis ? ((analysis.evenCount / analysis.totalCount) * 100).toFixed(1) : 0}%
-                  </div>
-                </div>
-                <div className="text-center p-4 bg-red-600/20 rounded-lg border border-red-500">
-                  <div className="text-2xl font-bold text-red-400">
-                    {analysis ? analysis.oddCount : 0}
-                  </div>
-                  <div className="text-sm text-red-300">Odd Numbers</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {analysis ? ((analysis.oddCount / analysis.totalCount) * 100).toFixed(1) : 0}%
-                  </div>
-                </div>
-              </div>
-              
-              {/* Prediction */}
-              {analysis && (
-                <div className="mt-4 p-3 bg-gray-800 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-300">Next Prediction:</span>
-                    <div className="flex items-center space-x-2">
-                      <span className={`font-bold ${
-                        analysis.evenCount > analysis.oddCount ? 'text-red-400' : 'text-blue-400'
-                      }`}>
-                        {analysis.evenCount > analysis.oddCount ? 'ODD' : 'EVEN'}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        ({Math.abs(analysis.evenCount - analysis.oddCount)} difference)
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      
-      case 'matchdiffers':
-        return (
-          <div className="mb-6">
-            <div className="bg-gray-700 rounded-lg p-4 mb-4">
-              <h4 className="text-white font-medium mb-3">Match/Differs Analysis</h4>
-              
-              {/* Digit Selection */}
-              <div className="mb-4">
-                <label className="block text-sm text-gray-300 mb-2">Select Target Digit:</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(digit => {
-                    const count = analysis ? analysis.digitCounts[digit] : 0;
-                    const percentage = analysis ? ((count / analysis.totalCount) * 100).toFixed(1) : '0';
-                    return (
-                      <div key={digit} className="text-center p-2 bg-gray-800 rounded border border-gray-600">
-                        <div className="text-lg font-bold text-white">{digit}</div>
-                        <div className="text-xs text-gray-400">{count}x</div>
-                        <div className="text-xs text-gray-500">{percentage}%</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              
-              {/* Match/Differs Prediction */}
-              {analysis && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-green-600/20 rounded-lg border border-green-500">
-                    <div className="text-xl font-bold text-green-400">MATCH</div>
-                    <div className="text-sm text-green-300">
-                      Hottest: {analysis.hottestNumbers.join(', ')}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {analysis.hottestCount} occurrences
-                    </div>
-                  </div>
-                  <div className="text-center p-4 bg-yellow-600/20 rounded-lg border border-yellow-500">
-                    <div className="text-xl font-bold text-yellow-400">DIFFERS</div>
-                    <div className="text-sm text-yellow-300">
-                      Coldest: {analysis.coldestNumbers.join(', ')}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {analysis.coldestCount} occurrences
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      
-      default:
-        return null;
-    }
-  };
+  const connectionDisplay = getConnectionDisplay();
+  const ConnectionIcon = connectionDisplay.icon;
 
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-semibold text-white">Live Ticks</h3>
-        <div className="flex items-center space-x-2">
-          <div className={`w-2 h-2 rounded-full ${
-            connectionStatus === 'connected' ? 'bg-green-400 animate-pulse' : 
-            connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' : 
-            'bg-red-400'
-          }`}></div>
-          <span className="text-sm text-gray-400">
-            {connectionStatus === 'connected' ? 'Live' : 
-             connectionStatus === 'connecting' ? 'Connecting...' : 
-             `Disconnected ${reconnectAttempts > 0 ? `(${reconnectAttempts}/5)` : ''}`}
-          </span>
+        <h3 className="text-xl font-semibold text-white">Live Ticks Analysis</h3>
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <ConnectionIcon className={`h-4 w-4 ${connectionDisplay.color} ${connectionStatus === 'connecting' ? 'animate-pulse' : ''}`} />
+            <span className={`text-sm ${connectionDisplay.color}`}>
+              {connectionDisplay.text}
+            </span>
+          </div>
+          {reconnectAttemptsRef.current > 0 && (
+            <span className="text-xs text-gray-400">
+              ({reconnectAttemptsRef.current}/{maxReconnectAttempts})
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Category Tabs */}
-      <div className="flex space-x-1 mb-4 bg-gray-700 rounded-lg p-1">
-        {categories.map((category) => (
-          <button
-            key={category.id}
-            onClick={() => setActiveCategory(category.id)}
-            className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
-              activeCategory === category.id
-                ? 'bg-gray-900 text-white border border-gray-500'
-                : 'text-gray-400 hover:text-white hover:bg-gray-600'
-            }`}
-          >
-            {category.label}
-          </button>
-        ))}
+      {/* Error Display */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Symbol Selector */}
+      <div className="mb-6">
+        <div className="flex space-x-1 bg-gray-700 rounded-lg p-1">
+          {volatilityIndices.map((index) => (
+            <button
+              key={index.symbol}
+              onClick={() => handleSymbolChange(index.symbol)}
+              disabled={!isConnected}
+              className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 ${
+                selectedSymbol === index.symbol
+                  ? 'bg-gray-900 text-white border border-gray-500'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-600'
+              }`}
+            >
+              {index.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Category Content */}
-      {getCategoryContent()}
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-          <span className="ml-3 text-gray-400">
-            {connectionStatus === 'connecting' ? 'Connecting to market data...' : 'Loading tick data...'}
-          </span>
-        </div>
-      ) : (
-        <>
-          {/* Horizontal Tick Display */}
-          <div className="mb-6">
-            <div className="flex items-center justify-center space-x-2 mb-4">
-              <span className="text-sm text-gray-400">Last Digits:</span>
-              <div className="flex space-x-1 overflow-x-auto">
-                {hasReceivedData && digits.map((digit, index) => {
-                  const movement = getPriceMovement(index);
-                  return (
-                    <div
-                      key={index}
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ${getDigitColor(digit, index)} ${getMovementClass(movement)}`}
-                    >
-                      {digit}
-                    </div>
-                  );
-                })}
+      {/* Current Price Display */}
+      {currentTick && (
+        <div className="mb-6 bg-gray-750 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-lg font-semibold text-white">{getSymbolConfig(selectedSymbol).name}</h4>
+              <p className="text-sm text-gray-400">Symbol: {currentTick.symbol}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-blue-400 font-mono">
+                {currentTick.price.toFixed(getSymbolConfig(selectedSymbol).pip === 0.01 ? 2 : getSymbolConfig(selectedSymbol).pip === 0.001 ? 3 : 4)}
+              </div>
+              <div className="text-sm text-gray-400">
+                {new Date(currentTick.epoch * 1000).toLocaleTimeString()}
               </div>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Mini Chart */}
-          <div className="h-32 mb-4 bg-gray-750 rounded-lg p-2">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <XAxis 
-                    dataKey="time" 
-                    type="number" 
-                    scale="time" 
-                    domain={['dataMin', 'dataMax']}
-                    tickFormatter={() => ''}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis 
-                    domain={['dataMin - 0.001', 'dataMax + 0.001']}
-                    tickFormatter={() => ''}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip 
-                    formatter={(value: any) => [value.toFixed(decimals), 'Price']}
-                    labelFormatter={(time: any) => new Date(time).toLocaleTimeString()}
-                    contentStyle={{
-                      backgroundColor: '#1F2937',
-                      border: '1px solid #374151',
-                      borderRadius: '6px',
-                      color: '#F9FAFB'
-                    }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="price" 
-                    stroke="#3B82F6" 
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: '#3B82F6' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-400">
-                <div className="text-center">
-                  <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Waiting for chart data...</p>
-                </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading tick data...</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Last Digits Display */}
+          <div className="mb-6">
+            <h4 className="text-lg font-medium text-white mb-3">Last 20 Digits</h4>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {recentDigits.map((digit, index) => {
+                const isEven = digit % 2 === 0;
+                const isRecent = index >= recentDigits.length - 5;
+                return (
+                  <div
+                    key={index}
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                      isRecent
+                        ? isEven
+                          ? 'bg-blue-500 text-white shadow-lg scale-110'
+                          : 'bg-red-500 text-white shadow-lg scale-110'
+                        : isEven
+                        ? 'bg-blue-400 text-white'
+                        : 'bg-red-400 text-white'
+                    }`}
+                  >
+                    {digit}
+                  </div>
+                );
+              })}
+            </div>
+            {recentDigits.length === 0 && (
+              <div className="text-center text-gray-400 py-4">
+                <p>Waiting for tick data...</p>
               </div>
             )}
           </div>
 
-          {/* Digit Analysis */}
-          {analysis && (
-            <div className="mb-4 bg-gray-750 rounded-lg p-4">
-              <h5 className="text-sm font-medium text-white mb-3">Digit Analysis ({analysis.totalCount} digits)</h5>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="text-center">
-                  <div className="text-lg font-bold text-red-400">
-                    {analysis.hottestNumbers.join(', ')}
+          {/* Price Chart */}
+          <div className="mb-6">
+            <h4 className="text-lg font-medium text-white mb-3">Price Movement</h4>
+            <div className="h-48 bg-gray-750 rounded-lg p-2">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <XAxis 
+                      dataKey="time" 
+                      type="number" 
+                      scale="time" 
+                      domain={['dataMin', 'dataMax']}
+                      tickFormatter={() => ''}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      domain={['dataMin - 0.001', 'dataMax + 0.001']}
+                      tickFormatter={() => ''}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip 
+                      formatter={(value: any) => [
+                        typeof value === 'number' ? value.toFixed(4) : value, 
+                        'Price'
+                      ]}
+                      labelFormatter={(time: any) => new Date(time).toLocaleTimeString()}
+                      contentStyle={{
+                        backgroundColor: '#1F2937',
+                        border: '1px solid #374151',
+                        borderRadius: '6px',
+                        color: '#F9FAFB'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="price" 
+                      stroke="#3B82F6" 
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, fill: '#3B82F6' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  <div className="text-center">
+                    <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Waiting for chart data...</p>
                   </div>
-                  <div className="text-xs text-gray-400">Hottest Number{analysis.hottestNumbers.length > 1 ? 's' : ''}</div>
-                  <div className="text-xs text-red-300">({analysis.hottestCount} times)</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-blue-400">
-                    {analysis.coldestNumbers.join(', ')}
+              )}
+            </div>
+          </div>
+
+          {/* Digit Analysis */}
+          {digitStats.length > 0 && (
+            <div className="bg-gray-750 rounded-lg p-4">
+              <h4 className="text-lg font-medium text-white mb-3">
+                Digit Analysis ({digitHistory.length} samples)
+              </h4>
+              
+              {/* Top/Bottom Digits */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="text-center p-3 bg-red-600/20 rounded-lg border border-red-500">
+                  <div className="text-xl font-bold text-red-400">
+                    {digitStats[0]?.digit ?? 'N/A'}
                   </div>
-                  <div className="text-xs text-gray-400">Coldest Number{analysis.coldestNumbers.length > 1 ? 's' : ''}</div>
-                  <div className="text-xs text-blue-300">({analysis.coldestCount} times)</div>
+                  <div className="text-sm text-red-300">Hottest Digit</div>
+                  <div className="text-xs text-gray-400">
+                    {digitStats[0]?.count ?? 0} times ({digitStats[0]?.percentage.toFixed(1) ?? 0}%)
+                  </div>
+                </div>
+                <div className="text-center p-3 bg-blue-600/20 rounded-lg border border-blue-500">
+                  <div className="text-xl font-bold text-blue-400">
+                    {digitStats[digitStats.length - 1]?.digit ?? 'N/A'}
+                  </div>
+                  <div className="text-sm text-blue-300">Coldest Digit</div>
+                  <div className="text-xs text-gray-400">
+                    {digitStats[digitStats.length - 1]?.count ?? 0} times ({digitStats[digitStats.length - 1]?.percentage.toFixed(1) ?? 0}%)
+                  </div>
                 </div>
               </div>
-              
-              {/* Digit frequency bars */}
-              <div className="space-y-1">
-                {analysis.digitCounts.map((count, digit) => (
-                  <div key={digit} className="flex items-center space-x-2">
-                    <span className="text-xs text-gray-400 w-4">{digit}:</span>
-                    <div className="flex-1 bg-gray-700 rounded-full h-2">
+
+              {/* Digit Frequency Bars */}
+              <div className="space-y-2">
+                {digitStats.map((stat) => (
+                  <div key={stat.digit} className="flex items-center space-x-3">
+                    <span className="text-sm text-gray-300 w-4">{stat.digit}:</span>
+                    <div className="flex-1 bg-gray-700 rounded-full h-3">
                       <div 
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          count === analysis.hottestCount ? 'bg-red-400' :
-                          count === analysis.coldestCount ? 'bg-blue-400' : 'bg-gray-500'
+                        className={`h-3 rounded-full transition-all duration-500 ${
+                          stat === digitStats[0] ? 'bg-red-400' :
+                          stat === digitStats[digitStats.length - 1] ? 'bg-blue-400' : 
+                          'bg-gray-500'
                         }`}
-                        style={{ width: `${(count / Math.max(...analysis.digitCounts)) * 100}%` }}
+                        style={{ width: `${stat.percentage}%` }}
                       ></div>
                     </div>
-                    <span className="text-xs text-gray-300 w-6">{count}</span>
+                    <span className="text-sm text-gray-300 w-12">{stat.count}</span>
+                    <span className="text-xs text-gray-400 w-12">{stat.percentage.toFixed(1)}%</span>
                   </div>
                 ))}
               </div>
+
+              {/* Even/Odd Analysis */}
+              <div className="mt-4 pt-4 border-t border-gray-600">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-blue-400">
+                      {digitHistory.filter(d => d % 2 === 0).length}
+                    </div>
+                    <div className="text-sm text-blue-300">Even Numbers</div>
+                    <div className="text-xs text-gray-400">
+                      {((digitHistory.filter(d => d % 2 === 0).length / digitHistory.length) * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-red-400">
+                      {digitHistory.filter(d => d % 2 === 1).length}
+                    </div>
+                    <div className="text-sm text-red-300">Odd Numbers</div>
+                    <div className="text-xs text-gray-400">
+                      {((digitHistory.filter(d => d % 2 === 1).length / digitHistory.length) * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
-          <div className="bg-gray-750 rounded-lg p-3">
-            <div className="text-lg font-bold text-blue-400">
-              {analysis ? analysis.evenCount : digits.filter(d => d % 2 === 0).length}
-            </div>
-            <div className="text-xs text-gray-400">Even</div>
-          </div>
         </>
       )}
     </div>

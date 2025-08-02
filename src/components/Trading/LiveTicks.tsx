@@ -228,7 +228,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     const recent5 = recentDigits.slice(-5);
     const lastDigit = recentDigits[recentDigits.length - 1];
 
-    // Matches/Differs Prediction
+    // Matches/Differs Prediction with specific digits
     const recentMatches = matchesHistory.slice(-10);
     const matchRate = recentMatches.length > 0 ? 
       (recentMatches.filter(m => m.matched).length / recentMatches.length) * 100 : 50;
@@ -237,16 +237,29 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'MATCHES',
         confidence: Math.min(matchRate + 10, 85),
-        reasoning: `Recent match rate: ${matchRate.toFixed(1)}%. Pattern suggests continuation.`,
+        reasoning: `Strong match pattern detected. Next tick likely matches ${lastDigit}.`,
         expectedDigit: lastDigit,
         color: 'text-green-400',
         icon: Target
       });
     } else if (matchRate < 40) {
+      // For differs, predict the most likely different digit based on frequency
+      const digitFreq = Array(10).fill(0);
+      digitHistory.forEach(d => digitFreq[d]++);
+      
+      // Find most frequent digits excluding the last digit
+      const availableDigits = digitFreq
+        .map((count, digit) => ({ digit, count }))
+        .filter(item => item.digit !== lastDigit)
+        .sort((a, b) => b.count - a.count);
+      
+      const predictedDigit = availableDigits.length > 0 ? availableDigits[0].digit : (lastDigit + 1) % 10;
+      
       predictions.push({
         type: 'DIFFERS',
         confidence: Math.min((100 - matchRate) + 10, 85),
-        reasoning: `Recent differ rate: ${(100 - matchRate).toFixed(1)}%. Pattern suggests change.`,
+        reasoning: `Strong differ pattern. Next tick likely ${predictedDigit} (most frequent alternative).`,
+        expectedDigit: predictedDigit,
         color: 'text-red-400',
         icon: Target
       });
@@ -301,13 +314,12 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     const digitStats = calculateDigitStats();
     if (digitStats.length > 0) {
       const coldestDigit = digitStats[digitStats.length - 1];
-      const hottestDigit = digitStats[0];
       
-      if (coldestDigit.count === 0 && digitHistory.length > 20) {
+      if (coldestDigit.count <= 1 && digitHistory.length > 20) {
         predictions.push({
-          type: 'MATCHES',
+          type: 'DIFFERS',
           confidence: 70,
-          reasoning: `Digit ${coldestDigit.digit} hasn't appeared recently. Due for occurrence.`,
+          reasoning: `Digit ${coldestDigit.digit} is overdue. Strong candidate for next tick.`,
           expectedDigit: coldestDigit.digit,
           color: 'text-yellow-400',
           icon: Brain
@@ -318,10 +330,22 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     // Pattern Break Prediction
     const last3 = recent5.slice(-3);
     if (last3.length === 3 && last3.every(d => d === last3[0])) {
+      // Predict a different digit based on recent frequency
+      const digitFreq = Array(10).fill(0);
+      recent10.forEach(d => digitFreq[d]++);
+      
+      const availableDigits = digitFreq
+        .map((count, digit) => ({ digit, count }))
+        .filter(item => item.digit !== last3[0])
+        .sort((a, b) => b.count - a.count);
+      
+      const breakDigit = availableDigits.length > 0 ? availableDigits[0].digit : (last3[0] + 1) % 10;
+      
       predictions.push({
         type: 'DIFFERS',
         confidence: 75,
-        reasoning: `Three consecutive ${last3[0]}s. Pattern break highly likely.`,
+        reasoning: `Three consecutive ${last3[0]}s. Break to ${breakDigit} expected.`,
+        expectedDigit: breakDigit,
         color: 'text-orange-400',
         icon: AlertCircle
       });
@@ -1055,7 +1079,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                             {prediction.type}
                           </span>
                           {prediction.expectedDigit !== undefined && (
-                            <span className="bg-gray-700 px-2 py-1 rounded text-xs text-white">
+                            <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white font-bold">
                               {prediction.expectedDigit}
                             </span>
                           )}

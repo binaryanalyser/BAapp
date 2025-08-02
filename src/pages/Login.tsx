@@ -62,7 +62,7 @@ const Login: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center">
-            <BarChart3 className="h-12 w-12 text-blue-500" />
+            <img src="/logo_ba.png" alt="Binary Analyzer" className="h-12 w-full max-w-48" />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-white">
             Welcome to Binary Analyzer

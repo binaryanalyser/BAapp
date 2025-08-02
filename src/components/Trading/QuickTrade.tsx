@@ -405,7 +405,7 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
                 <TrendingDown className="h-8 w-8 animate-bounce" />
                 <span className="text-lg">Trade Lower</span>
                 <Zap className="h-4 w-4 animate-pulse" />
-              </>
+              </>d
             )}
           </button>
         </div>

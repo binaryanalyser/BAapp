@@ -333,13 +333,13 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
             {/* Last Digits Display */}
             <div className="mb-6">
               <div className="flex items-center space-x-4 mb-4">
-                <span className="text-gray-800 font-medium">Last Digits:</span>
+                <span className="text-gray-400 font-medium">Last Digits:</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {recentDigits.map((digit, index) => (
                   <div
                     key={index}
-                    className={`w-20 h-20 rounded-lg flex items-center justify-center text-white font-bold ${
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${
                       getDigitColor(digit, digitStats)
                     }`}
                   >

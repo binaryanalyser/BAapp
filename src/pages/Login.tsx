@@ -167,6 +167,25 @@ const Login: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Disclaimer */}
+        <div className="mt-8 bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div className="text-xs text-gray-400 leading-relaxed">
+            <p className="mb-2">
+              The products offered on the Deriv.com website include binary options, contracts for difference ("CFDs") and other complex derivatives.
+            </p>
+            <p className="mb-2">
+              Trading binary options may not be suitable for everyone. Trading CFDs carries a high level of risk since leverage can work both to your advantage and disadvantage.
+            </p>
+            <p className="mb-2">
+              As a result, the products offered on the website may not be suitable for all investors because of the risk of losing all of your invested capital.
+            </p>
+            <p>
+              You should never invest money that you cannot afford to lose, and never trade with borrowed money. Before trading in the complex products offered,
+              please be sure to understand the risks involved.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

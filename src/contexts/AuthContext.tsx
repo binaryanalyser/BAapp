@@ -30,11 +30,13 @@ interface AuthContextType {
   isLoading: boolean;
   accountList: AccountListItem[] | null;
   loginMethod: 'oauth' | 'token' | null;
+  accountBalances: Record<string, number>;
   login: (token: string) => Promise<void>;
   loginWithOAuth: (token: string) => Promise<void>;
   logout: () => void;
   updateBalance: (balance: number) => void;
   switchAccount: (loginid: string) => Promise<void>;
+  handleTokenLogin: (token: string, method?: 'oauth' | 'token') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,41 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Fetch balances for all accounts when account list is available
   useEffect(() => {
-    const fetchAccountBalances = async () => {
-      if (accountList && accountList.length > 1 && loginMethod === 'oauth') {
-        console.log('Fetching balances for all accounts...');
-        
-        // Update balances from the account list data
-        const balances: Record<string, number> = {};
-        accountList.forEach(account => {
-          balances[account.loginid] = account.balance || 0;
-        });
-        setAccountBalances(balances);
-        
-        // Try to get fresh balance for current account
-        if (user && isAuthenticated) {
-          try {
-            const balanceResponse = await derivAPI.getBalance();
-            if (balanceResponse.balance) {
-              const freshBalance = balanceResponse.balance.balance;
-              setAccountBalances(prev => ({
-                ...prev,
-                [user.loginid]: freshBalance
-              }));
-              updateBalance(freshBalance);
-            }
-          } catch (error) {
-            console.warn('Failed to fetch current account balance:', error);
-          }
-        }
-      }
-    };
-
-    fetchAccountBalances();
-  }, [accountList, user?.loginid, isAuthenticated, loginMethod]);
-  // Check for saved token on mount
-  useEffect(() => {
-    const savedToken = localStorage.getItem('deriv_token');
+  const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
     const savedLoginMethod = localStorage.getItem('deriv_login_method') as 'oauth' | 'token' | null;
     if (savedToken) {
       handleTokenLogin(savedToken, savedLoginMethod || 'token').catch(error => {
@@ -111,7 +79,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } else {
       setIsLoading(false);
     }
-  }, []);
+  };
 
   const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
     try {
@@ -180,19 +148,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (error instanceof Error && error.message.includes('InvalidToken')) {
         localStorage.removeItem('deriv_token');
         localStorage.removeItem('deriv_login_method');
-        setUser(null);
-        setToken(null);
-        setLoginMethod(null);
-        setIsAuthenticated(false);
-      } else {
-        // For connection issues, keep the token but set loading to false
-        console.warn('Connection issue during auth, keeping token for retry');
-      }
-      throw error;
+      handleTokenLogin(savedToken, savedLoginMethod || 'token').catch(error => {
+        console.error('Failed to restore session:', error);
+        // Clear invalid session
+        localStorage.removeItem('deriv_token');
+        localStorage.removeItem('deriv_login_method');
+        setIsLoading(false);
+      });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const login = async (authToken: string) => {
     await handleTokenLogin(authToken, 'token');

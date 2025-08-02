@@ -138,48 +138,50 @@ const Header: React.FC = () => {
                     {isAccountDropdownOpen && (
                       <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50">
                         <div className="p-2">
-                                  isCurrentAccount
+                          <div className="text-xs text-gray-400 mb-2">
                             Switch Account ({accountList.length} available)
                           </div>
-                          {accountList.map((account) => (
+                          {accountList.map((account) => {
                             const accountBalance = getAccountBalance(account);
                             const isCurrentAccount = account.loginid === user.loginid;
+                            return (
                             <button
                               key={account.loginid}
                               onClick={() => handleAccountSwitch(account.loginid)}
-                                      {isCurrentAccount && (
-                                        <div className="text-xs bg-green-500 text-white px-2 py-1 rounded">
-                                          ACTIVE
-                                        </div>
-                                      )}
                               disabled={isSwitching}
                               className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                                      {account.is_virtual ? 'Demo Account' : 'Real Account'} • {account.currency}
+                                isCurrentAccount
                                   ? 'bg-blue-600 text-white'
                                   : 'hover:bg-gray-700 text-gray-300'
                               } ${isSwitching ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    <div className="text-sm font-mono font-bold">
-                                      {formatBalance(accountBalance, account.currency)}
+                            >
+                              <div className="flex justify-between items-center">
                                 <div>
-                                    {isCurrentAccount && (
-                                      <div className="text-xs text-green-400 mt-1">Current</div>
-                                    )}
-                                    {!isCurrentAccount && accountBalance !== (account.balance || 0) && (
-                                      <div className="text-xs text-yellow-400 mt-1">Updated</div>
-                                    {account.is_virtual ? 'Demo Account' : 'Real Account'}
+                                  <div className="text-sm font-medium">{account.loginid}</div>
+                                  <div className="text-xs text-gray-400">
+                                    {account.is_virtual ? 'Demo Account' : 'Real Account'} • {account.currency}
                                   </div>
+                                  {isCurrentAccount && (
+                                    <div className="text-xs bg-green-500 text-white px-2 py-1 rounded">
+                                      ACTIVE
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-sm font-mono">
-                                    {account.balance?.toFixed(2) || '0.00'} {account.currency}
+                                  <div className="text-sm font-mono font-bold">
+                                    {formatBalance(accountBalance, account.currency)}
                                   </div>
-                                  {account.loginid === user.loginid && (
-                                    <div className="text-xs text-blue-400">Active</div>
+                                  {isCurrentAccount && (
+                                    <div className="text-xs text-green-400 mt-1">Current</div>
+                                  )}
+                                  {!isCurrentAccount && accountBalance !== (account.balance || 0) && (
+                                    <div className="text-xs text-yellow-400 mt-1">Updated</div>
                                   )}
                                 </div>
                               </div>
                             </button>
-                          ))}
+                            );
+                          })}
                           
                           {/* Account Summary */}
                           <div className="mt-2 pt-2 border-t border-gray-600">

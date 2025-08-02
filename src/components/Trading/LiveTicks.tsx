@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, TrendingUp, TrendingDown, Wifi, WifiOff } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Wifi, WifiOff, Target } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 
 interface LiveTicksProps {
@@ -27,6 +27,7 @@ interface DigitStats {
 
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const [selectedSymbol, setSelectedSymbol] = useState('R_10');
+  const [activeTab, setActiveTab] = useState<'volatility' | 'matches' | 'odd-even'>('volatility');
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   const [currentTick, setCurrentTick] = useState<TickData | null>(null);
@@ -35,6 +36,8 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const [digitHistory, setDigitHistory] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [matchesHistory, setMatchesHistory] = useState<{ digit: number; matched: boolean; timestamp: number }[]>([]);
+  const [differsHistory, setDiffersHistory] = useState<{ digit: number; differed: boolean; timestamp: number }[]>([]);
   
   const wsRef = useRef<WebSocket | null>(null);
   const subscriptionIdRef = useRef<string | null>(null);
@@ -192,6 +195,25 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       
       setDigitHistory(prev => [...prev, lastDigit].slice(-100)); // Keep last 100 for analysis
       
+      // Update matches/differs history
+      const previousDigit = digitHistory[digitHistory.length - 1];
+      if (previousDigit !== undefined) {
+        const matched = lastDigit === previousDigit;
+        const differed = lastDigit !== previousDigit;
+        
+        setMatchesHistory(prev => [...prev, {
+          digit: lastDigit,
+          matched,
+          timestamp: data.tick.epoch
+        }].slice(-50));
+        
+        setDiffersHistory(prev => [...prev, {
+          digit: lastDigit,
+          differed,
+          timestamp: data.tick.epoch
+        }].slice(-50));
+      }
+      
       // Update chart data
       setChartData(prev => {
         const newPoint: ChartDataPoint = {
@@ -330,6 +352,8 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     setRecentDigits([]);
     setDigitHistory([]);
     setChartData([]);
+    setMatchesHistory([]);
+    setDiffersHistory([]);
     setIsLoading(true);
     setError(null);
     
@@ -354,6 +378,43 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   };
 
   const digitStats = calculateDigitStats();
+
+  // Calculate matches/differs statistics
+  const calculateMatchesStats = () => {
+    if (matchesHistory.length === 0) return { matches: 0, total: 0, percentage: 0 };
+    
+    const matches = matchesHistory.filter(item => item.matched).length;
+    const total = matchesHistory.length;
+    const percentage = (matches / total) * 100;
+    
+    return { matches, total, percentage };
+  };
+
+  const calculateDiffersStats = () => {
+    if (differsHistory.length === 0) return { differs: 0, total: 0, percentage: 0 };
+    
+    const differs = differsHistory.filter(item => item.differed).length;
+    const total = differsHistory.length;
+    const percentage = (differs / total) * 100;
+    
+    return { differs, total, percentage };
+  };
+
+  const calculateOddEvenStats = () => {
+    if (digitHistory.length === 0) return { odd: 0, even: 0, total: 0, oddPercentage: 0, evenPercentage: 0 };
+    
+    const odd = digitHistory.filter(d => d % 2 === 1).length;
+    const even = digitHistory.filter(d => d % 2 === 0).length;
+    const total = digitHistory.length;
+    const oddPercentage = (odd / total) * 100;
+    const evenPercentage = (even / total) * 100;
+    
+    return { odd, even, total, oddPercentage, evenPercentage };
+  };
+
+  const matchesStats = calculateMatchesStats();
+  const differsStats = calculateDiffersStats();
+  const oddEvenStats = calculateOddEvenStats();
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -394,6 +455,360 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
 
   const connectionDisplay = getConnectionDisplay();
   const ConnectionIcon = connectionDisplay.icon;
+
+  // Tab configuration
+  const tabs = [
+    { id: 'volatility' as const, label: 'Volatility Analysis', icon: Activity },
+    { id: 'matches' as const, label: 'Matches/Differs', icon: Target },
+    { id: 'odd-even' as const, label: 'Odd/Even Analysis', icon: TrendingUp }
+  ];
+
+  // Render tab content
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'volatility':
+        return renderVolatilityTab();
+      case 'matches':
+        return renderMatchesTab();
+      case 'odd-even':
+        return renderOddEvenTab();
+      default:
+        return renderVolatilityTab();
+    }
+  };
+
+  const renderVolatilityTab = () => (
+    <>
+      {/* Last Digits Display */}
+      <div className="mb-6">
+        <h4 className="text-lg font-medium text-white mb-3">Last 20 Digits</h4>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {recentDigits.map((digit, index) => {
+            const isEven = digit % 2 === 0;
+            const isRecent = index >= recentDigits.length - 5;
+            return (
+              <div
+                key={index}
+                className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                  isRecent
+                    ? isEven
+                      ? 'bg-blue-500 text-white shadow-lg scale-110'
+                      : 'bg-red-500 text-white shadow-lg scale-110'
+                    : isEven
+                    ? 'bg-blue-400 text-white'
+                    : 'bg-red-400 text-white'
+                }`}
+              >
+                {digit}
+              </div>
+            );
+          })}
+        </div>
+        {recentDigits.length === 0 && (
+          <div className="text-center text-gray-400 py-4">
+            <p>Waiting for tick data...</p>
+          </div>
+        )}
+      </div>
+
+      {/* Digit Analysis */}
+      {digitStats.length > 0 && (
+        <div className="bg-gray-750 rounded-lg p-4">
+          <h4 className="text-lg font-medium text-white mb-3">
+            Digit Analysis ({digitHistory.length} samples)
+          </h4>
+          
+          {/* Top/Bottom Digits */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="text-center p-3 bg-red-600/20 rounded-lg border border-red-500">
+              <div className="text-xl font-bold text-red-400">
+                {digitStats[0]?.digit ?? 'N/A'}
+              </div>
+              <div className="text-sm text-red-300">Hottest Digit</div>
+              <div className="text-xs text-gray-400">
+                {digitStats[0]?.count ?? 0} times ({digitStats[0]?.percentage.toFixed(1) ?? 0}%)
+              </div>
+            </div>
+            <div className="text-center p-3 bg-blue-600/20 rounded-lg border border-blue-500">
+              <div className="text-xl font-bold text-blue-400">
+                {digitStats[digitStats.length - 1]?.digit ?? 'N/A'}
+              </div>
+              <div className="text-sm text-blue-300">Coldest Digit</div>
+              <div className="text-xs text-gray-400">
+                {digitStats[digitStats.length - 1]?.count ?? 0} times ({digitStats[digitStats.length - 1]?.percentage.toFixed(1) ?? 0}%)
+              </div>
+            </div>
+          </div>
+
+          {/* Digit Frequency Bars */}
+          <div className="space-y-2">
+            {digitStats.map((stat) => (
+              <div key={stat.digit} className="flex items-center space-x-3">
+                <span className="text-sm text-gray-300 w-4">{stat.digit}:</span>
+                <div className="flex-1 bg-gray-700 rounded-full h-3">
+                  <div 
+                    className={`h-3 rounded-full transition-all duration-500 ${
+                      stat === digitStats[0] ? 'bg-red-400' :
+                      stat === digitStats[digitStats.length - 1] ? 'bg-blue-400' : 
+                      'bg-gray-500'
+                    }`}
+                    style={{ width: `${stat.percentage}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm text-gray-300 w-12">{stat.count}</span>
+                <span className="text-xs text-gray-400 w-12">{stat.percentage.toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const renderMatchesTab = () => (
+    <div className="space-y-6">
+      {/* Matches/Differs Overview */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-green-600/20 rounded-lg border border-green-500 p-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-400">
+              {matchesStats.matches}
+            </div>
+            <div className="text-sm text-green-300 mb-1">Matches</div>
+            <div className="text-xs text-gray-400">
+              {matchesStats.percentage.toFixed(1)}% of {matchesStats.total} ticks
+            </div>
+          </div>
+        </div>
+        <div className="bg-red-600/20 rounded-lg border border-red-500 p-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-red-400">
+              {differsStats.differs}
+            </div>
+            <div className="text-sm text-red-300 mb-1">Differs</div>
+            <div className="text-xs text-gray-400">
+              {differsStats.percentage.toFixed(1)}% of {differsStats.total} ticks
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Matches/Differs Pattern */}
+      <div className="bg-gray-750 rounded-lg p-4">
+        <h4 className="text-lg font-medium text-white mb-3">
+          Recent Pattern (Last 20)
+        </h4>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {matchesHistory.slice(-20).map((item, index) => (
+            <div
+              key={index}
+              className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center text-xs font-bold transition-all duration-300 ${
+                item.matched
+                  ? 'bg-green-500 text-white'
+                  : 'bg-red-500 text-white'
+              }`}
+            >
+              <div>{item.digit}</div>
+              <div className="text-xs opacity-75">
+                {item.matched ? 'M' : 'D'}
+              </div>
+            </div>
+          ))}
+        </div>
+        {matchesHistory.length === 0 && (
+          <div className="text-center text-gray-400 py-4">
+            <p>Waiting for pattern data...</p>
+          </div>
+        )}
+      </div>
+
+      {/* Matches/Differs Statistics */}
+      <div className="bg-gray-750 rounded-lg p-4">
+        <h4 className="text-lg font-medium text-white mb-3">
+          Pattern Analysis
+        </h4>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-300">Match Rate:</span>
+            <div className="flex items-center space-x-2">
+              <div className="w-32 bg-gray-700 rounded-full h-2">
+                <div 
+                  className="h-2 bg-green-400 rounded-full transition-all duration-500"
+                  style={{ width: `${matchesStats.percentage}%` }}
+                ></div>
+              </div>
+              <span className="text-green-400 font-mono text-sm">
+                {matchesStats.percentage.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-300">Differ Rate:</span>
+            <div className="flex items-center space-x-2">
+              <div className="w-32 bg-gray-700 rounded-full h-2">
+                <div 
+                  className="h-2 bg-red-400 rounded-full transition-all duration-500"
+                  style={{ width: `${differsStats.percentage}%` }}
+                ></div>
+              </div>
+              <span className="text-red-400 font-mono text-sm">
+                {differsStats.percentage.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderOddEvenTab = () => (
+    <div className="space-y-6">
+      {/* Odd/Even Overview */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-blue-600/20 rounded-lg border border-blue-500 p-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-400">
+              {oddEvenStats.even}
+            </div>
+            <div className="text-sm text-blue-300 mb-1">Even Numbers</div>
+            <div className="text-xs text-gray-400">
+              {oddEvenStats.evenPercentage.toFixed(1)}% of {oddEvenStats.total} digits
+            </div>
+            <div className="text-xs text-blue-200 mt-2">
+              0, 2, 4, 6, 8
+            </div>
+          </div>
+        </div>
+        <div className="bg-red-600/20 rounded-lg border border-red-500 p-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-red-400">
+              {oddEvenStats.odd}
+            </div>
+            <div className="text-sm text-red-300 mb-1">Odd Numbers</div>
+            <div className="text-xs text-gray-400">
+              {oddEvenStats.oddPercentage.toFixed(1)}% of {oddEvenStats.total} digits
+            </div>
+            <div className="text-xs text-red-200 mt-2">
+              1, 3, 5, 7, 9
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Odd/Even Pattern */}
+      <div className="bg-gray-750 rounded-lg p-4">
+        <h4 className="text-lg font-medium text-white mb-3">
+          Recent Pattern (Last 30)
+        </h4>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {recentDigits.slice(-30).map((digit, index) => {
+            const isEven = digit % 2 === 0;
+            const isRecent = index >= recentDigits.length - 5;
+            return (
+              <div
+                key={index}
+                className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                  isRecent
+                    ? isEven
+                      ? 'bg-blue-500 text-white shadow-lg scale-110 ring-2 ring-blue-300'
+                      : 'bg-red-500 text-white shadow-lg scale-110 ring-2 ring-red-300'
+                    : isEven
+                    ? 'bg-blue-400 text-white'
+                    : 'bg-red-400 text-white'
+                }`}
+              >
+                {digit}
+              </div>
+            );
+          })}
+        </div>
+        {recentDigits.length === 0 && (
+          <div className="text-center text-gray-400 py-4">
+            <p>Waiting for digit data...</p>
+          </div>
+        )}
+      </div>
+
+      {/* Detailed Odd/Even Analysis */}
+      <div className="bg-gray-750 rounded-lg p-4">
+        <h4 className="text-lg font-medium text-white mb-3">
+          Detailed Analysis
+        </h4>
+        
+        {/* Individual Digit Breakdown */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <h5 className="text-md font-medium text-blue-400 mb-2">Even Digits</h5>
+            <div className="space-y-2">
+              {[0, 2, 4, 6, 8].map(digit => {
+                const count = digitHistory.filter(d => d === digit).length;
+                const percentage = digitHistory.length > 0 ? (count / digitHistory.length) * 100 : 0;
+                return (
+                  <div key={digit} className="flex items-center justify-between">
+                    <span className="text-gray-300">{digit}:</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-16 bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="h-2 bg-blue-400 rounded-full transition-all duration-500"
+                          style={{ width: `${percentage * 2}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-xs text-gray-400 w-8">{count}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <h5 className="text-md font-medium text-red-400 mb-2">Odd Digits</h5>
+            <div className="space-y-2">
+              {[1, 3, 5, 7, 9].map(digit => {
+                const count = digitHistory.filter(d => d === digit).length;
+                const percentage = digitHistory.length > 0 ? (count / digitHistory.length) * 100 : 0;
+                return (
+                  <div key={digit} className="flex items-center justify-between">
+                    <span className="text-gray-300">{digit}:</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-16 bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="h-2 bg-red-400 rounded-full transition-all duration-500"
+                          style={{ width: `${percentage * 2}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-xs text-gray-400 w-8">{count}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Overall Statistics */}
+        <div className="pt-4 border-t border-gray-600">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-300">Even vs Odd Distribution:</span>
+            <div className="flex items-center space-x-2">
+              <div className="w-32 bg-gray-700 rounded-full h-3 flex overflow-hidden">
+                <div 
+                  className="bg-blue-400 transition-all duration-500"
+                  style={{ width: `${oddEvenStats.evenPercentage}%` }}
+                ></div>
+                <div 
+                  className="bg-red-400 transition-all duration-500"
+                  style={{ width: `${oddEvenStats.oddPercentage}%` }}
+                ></div>
+              </div>
+              <span className="text-xs text-gray-400">
+                {oddEvenStats.evenPercentage.toFixed(1)}% / {oddEvenStats.oddPercentage.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
@@ -471,36 +886,27 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         </div>
       ) : (
         <>
-          {/* Last Digits Display */}
+          {/* Analysis Tabs */}
           <div className="mb-6">
-            <h4 className="text-lg font-medium text-white mb-3">Last 20 Digits</h4>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {recentDigits.map((digit, index) => {
-                const isEven = digit % 2 === 0;
-                const isRecent = index >= recentDigits.length - 5;
+            <div className="flex space-x-1 bg-gray-700 rounded-lg p-1">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
                 return (
-                  <div
-                    key={index}
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ${
-                      isRecent
-                        ? isEven
-                          ? 'bg-blue-500 text-white shadow-lg scale-110'
-                          : 'bg-red-500 text-white shadow-lg scale-110'
-                        : isEven
-                        ? 'bg-blue-400 text-white'
-                        : 'bg-red-400 text-white'
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      activeTab === tab.id
+                        ? 'bg-gray-900 text-white border border-gray-500'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-600'
                     }`}
                   >
-                    {digit}
-                  </div>
+                    <Icon className="h-4 w-4" />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </button>
                 );
               })}
             </div>
-            {recentDigits.length === 0 && (
-              <div className="text-center text-gray-400 py-4">
-                <p>Waiting for tick data...</p>
-              </div>
-            )}
           </div>
 
           {/* Price Chart */}
@@ -559,81 +965,8 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
             </div>
           </div>
 
-          {/* Digit Analysis */}
-          {digitStats.length > 0 && (
-            <div className="bg-gray-750 rounded-lg p-4">
-              <h4 className="text-lg font-medium text-white mb-3">
-                Digit Analysis ({digitHistory.length} samples)
-              </h4>
-              
-              {/* Top/Bottom Digits */}
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="text-center p-3 bg-red-600/20 rounded-lg border border-red-500">
-                  <div className="text-xl font-bold text-red-400">
-                    {digitStats[0]?.digit ?? 'N/A'}
-                  </div>
-                  <div className="text-sm text-red-300">Hottest Digit</div>
-                  <div className="text-xs text-gray-400">
-                    {digitStats[0]?.count ?? 0} times ({digitStats[0]?.percentage.toFixed(1) ?? 0}%)
-                  </div>
-                </div>
-                <div className="text-center p-3 bg-blue-600/20 rounded-lg border border-blue-500">
-                  <div className="text-xl font-bold text-blue-400">
-                    {digitStats[digitStats.length - 1]?.digit ?? 'N/A'}
-                  </div>
-                  <div className="text-sm text-blue-300">Coldest Digit</div>
-                  <div className="text-xs text-gray-400">
-                    {digitStats[digitStats.length - 1]?.count ?? 0} times ({digitStats[digitStats.length - 1]?.percentage.toFixed(1) ?? 0}%)
-                  </div>
-                </div>
-              </div>
-
-              {/* Digit Frequency Bars */}
-              <div className="space-y-2">
-                {digitStats.map((stat) => (
-                  <div key={stat.digit} className="flex items-center space-x-3">
-                    <span className="text-sm text-gray-300 w-4">{stat.digit}:</span>
-                    <div className="flex-1 bg-gray-700 rounded-full h-3">
-                      <div 
-                        className={`h-3 rounded-full transition-all duration-500 ${
-                          stat === digitStats[0] ? 'bg-red-400' :
-                          stat === digitStats[digitStats.length - 1] ? 'bg-blue-400' : 
-                          'bg-gray-500'
-                        }`}
-                        style={{ width: `${stat.percentage}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm text-gray-300 w-12">{stat.count}</span>
-                    <span className="text-xs text-gray-400 w-12">{stat.percentage.toFixed(1)}%</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Even/Odd Analysis */}
-              <div className="mt-4 pt-4 border-t border-gray-600">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-blue-400">
-                      {digitHistory.filter(d => d % 2 === 0).length}
-                    </div>
-                    <div className="text-sm text-blue-300">Even Numbers</div>
-                    <div className="text-xs text-gray-400">
-                      {((digitHistory.filter(d => d % 2 === 0).length / digitHistory.length) * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-red-400">
-                      {digitHistory.filter(d => d % 2 === 1).length}
-                    </div>
-                    <div className="text-sm text-red-300">Odd Numbers</div>
-                    <div className="text-xs text-gray-400">
-                      {((digitHistory.filter(d => d % 2 === 1).length / digitHistory.length) * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Tab Content */}
+          {renderTabContent()}
         </>
       )}
     </div>

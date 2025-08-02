@@ -23,8 +23,6 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
   const [priceMovement, setPriceMovement] = useState<'up' | 'down' | 'neutral'>('neutral');
   const [previousPrice, setPreviousPrice] = useState<number>(0);
   const [profitAnimation, setProfitAnimation] = useState(false);
-  const [tradeSuccess, setTradeSuccess] = useState(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
 
   const currentPrice = ticks[selectedAsset]?.price || 0;
 
@@ -110,17 +108,6 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
       setTimeout(() => setProfitAnimation(false), 300);
     }
   }, [amount, selectedContract]);
-
-  // Countdown effect for trade success
-  useEffect(() => {
-    if (countdown !== null && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (countdown === 0) {
-      setCountdown(null);
-      setTradeSuccess(false);
-    }
-  }, [countdown]);
 
   const contractTypes = [
     { 
@@ -208,8 +195,6 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
         };
         
         addTrade(newTrade);
-        setTradeSuccess(true);
-        setCountdown(parseInt(duration) * 60);
 
         // Show success notification
         console.log('✅ Trade placed successfully:', {
@@ -274,25 +259,6 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
 
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 relative overflow-hidden">
-      {/* Success overlay */}
-      {tradeSuccess && (
-        <div className="absolute inset-0 bg-green-500/10 border-2 border-green-400 rounded-lg animate-pulse z-10">
-          <div className="flex items-center justify-center h-full">
-            <div className="bg-gray-800 rounded-lg p-4 border border-green-400">
-              <div className="flex items-center space-x-2 text-green-400">
-                <Zap className="h-5 w-5 animate-spin" />
-                <span className="font-medium">Trade Active!</span>
-                {countdown && (
-                  <span className="text-sm">
-                    {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
           <Target className="h-6 w-6 text-blue-400" />

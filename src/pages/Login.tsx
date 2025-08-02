@@ -13,8 +13,9 @@ const Login: React.FC = () => {
 
   const handleDerivLogin = () => {
     // Store current URL for redirect after OAuth
-    localStorage.setItem('oauth_redirect_url', window.location.origin);
-    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&affiliate_token=Yqc93056kqBB4VdSfJsOp2Nd7ZgqdRLk/1/&redirect_uri=${encodeURIComponent(window.location.origin + '/oauth-callback')}`;
+    localStorage.setItem('oauth_redirect_url', window.location.origin + '/');
+    const redirectUri = window.location.origin + '/oauth-callback';
+    const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&l=EN&brand=deriv&redirect_uri=${encodeURIComponent(redirectUri)}`;
     window.location.href = authUrl;
   };
 

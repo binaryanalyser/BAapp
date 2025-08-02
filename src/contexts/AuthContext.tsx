@@ -63,16 +63,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const handleTokenLogin = async (authToken: string) => {
     try {
       setIsLoading(true);
+      console.log('Starting authentication with token...');
       
       // Ensure connection is established
       if (!derivAPI.getConnectionStatus()) {
+        console.log('WebSocket not connected, establishing connection...');
         await derivAPI.connect();
         // Add a small delay to ensure connection is stable
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // Authorize with the token
+      console.log('Sending authorization request...');
       const response: AuthResponse = await derivAPI.authorize(authToken);
+      console.log('Authorization response received:', response);
       
       if (response.authorize) {
         const userData: User = {
@@ -92,6 +96,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Save token to localStorage
         localStorage.setItem('deriv_token', authToken);
         console.log('Authentication successful for:', userData.loginid);
+        console.log('User data set, authentication complete');
       }
     } catch (error) {
       console.error('Authorization failed:', error);

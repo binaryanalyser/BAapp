@@ -1,43 +1,55 @@
 import React, { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { BarChart3 } from 'lucide-react';
 
 const OAuthCallback: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
-      // Get token from URL parameters
-      const token = searchParams.get('token');
-      const error = searchParams.get('error');
+      try {
+        // Parse the URL hash for OAuth response
+        const hash = location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        
+        // Get token and other parameters from hash
+        const token = params.get('token') || params.get('access_token');
+        const error = params.get('error');
+        const errorDescription = params.get('error_description');
 
-      if (error) {
-        console.error('OAuth error:', error);
-        navigate('/login?error=' + encodeURIComponent(error));
-        return;
-      }
+        console.log('OAuth callback received:', { token: token ? 'present' : 'missing', error, hash });
 
-      if (token) {
-        try {
+        if (error) {
+          console.error('OAuth error:', error, errorDescription);
+          navigate('/login?error=' + encodeURIComponent(errorDescription || error));
+          return;
+        }
+
+        if (token) {
+          console.log('Token received, attempting login...');
           await login(token);
+          console.log('Login successful, redirecting...');
+          
           // Redirect to the original URL or dashboard
           const redirectUrl = localStorage.getItem('oauth_redirect_url') || '/';
           localStorage.removeItem('oauth_redirect_url');
-          navigate(redirectUrl);
-        } catch (err) {
-          console.error('Login failed:', err);
-          navigate('/login?error=' + encodeURIComponent('Login failed'));
+          navigate(redirectUrl, { replace: true });
+        } else {
+          console.error('No token received in OAuth callback');
+          navigate('/login?error=' + encodeURIComponent('No authentication token received'));
         }
-      } else {
-        navigate('/login?error=' + encodeURIComponent('No token received'));
+      } catch (err) {
+        console.error('OAuth callback error:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+        navigate('/login?error=' + encodeURIComponent(errorMessage));
       }
     };
 
     handleOAuthCallback();
-  }, [searchParams, login, navigate]);
+  }, [location, login, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">

@@ -614,7 +614,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
               <div className="w-full bg-gray-700 rounded-full h-3">
                 <div 
                   className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${(priceHistory.length / 10) * 100}%` }} {/* Reduced from 20 to 10 */}
+                  style={{ width: `${(priceHistory.length / 10) * 100}%` }}
                 ></div>
               </div>
               <div className="text-xs text-gray-500 mt-1 text-center">

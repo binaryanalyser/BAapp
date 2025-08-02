@@ -339,7 +339,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                 {recentDigits.map((digit, index) => (
                   <div
                     key={index}
-                    className={`w-15 h-15 rounded-lg flex items-center justify-center text-white font-bold ${
+                    className={`w-20 h-20 rounded-lg flex items-center justify-center text-white font-bold ${
                       getDigitColor(digit, digitStats)
                     }`}
                   >

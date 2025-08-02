@@ -69,67 +69,78 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Fetch balances for all accounts when account list is available
   useEffect(() => {
     const fetchAccountBalances = async () => {
-      if (accountList && accountList.length > 0 && loginMethod === 'oauth') {
+      if (accountList && accountList.length > 0 && loginMethod === 'oauth' && token) {
         console.log('Fetching balances for all accounts...');
         
-        // Initialize balances from the account list data
-        const balances: Record<string, number> = {};
-        accountList.forEach(account => {
-          balances[account.loginid] = account.balance || 0;
-        });
-        setAccountBalances(balances);
+        const freshBalances: Record<string, number> = {};
         
-        // Fetch fresh balances for all accounts
+        // Fetch fresh balances for all accounts by switching to each one
         for (const account of accountList) {
           try {
-            // Switch to each account temporarily to get fresh balance
-            const switchResponse = await derivAPI.sendRequest({
+            console.log(`Fetching balance for account: ${account.loginid}`);
+            
+            // Authorize with specific loginid to get fresh balance
+            const balanceResponse = await derivAPI.sendRequest({
               authorize: localStorage.getItem('deriv_token'),
               loginid: account.loginid
             });
             
-            if (switchResponse.authorize) {
-              const freshBalance = switchResponse.authorize.balance;
-              setAccountBalances(prev => ({
-                ...prev,
-                [account.loginid]: freshBalance
-              }));
-              
-              // Update the account list with fresh balance
-              setAccountList(prevList => 
-                prevList ? prevList.map(acc => 
-                  acc.loginid === account.loginid 
-                    ? { ...acc, balance: freshBalance }
-                    : acc
-                ) : prevList
-              );
-              
-              // If this is the current user, update their balance too
-              if (user && account.loginid === user.loginid) {
-                updateBalance(freshBalance);
-              }
+            if (balanceResponse.authorize && balanceResponse.authorize.balance !== undefined) {
+              freshBalances[account.loginid] = balanceResponse.authorize.balance;
+              console.log(`Balance for ${account.loginid}: ${balanceResponse.authorize.balance} ${account.currency}`);
+            } else {
+              // Fallback to account list balance
+              freshBalances[account.loginid] = account.balance || 0;
+              console.warn(`Could not fetch fresh balance for ${account.loginid}, using cached balance`);
             }
           } catch (error) {
             console.warn(`Failed to fetch balance for account ${account.loginid}:`, error);
+            // Use the balance from account list as fallback
+            freshBalances[account.loginid] = account.balance || 0;
           }
+        }
+        
+        // Update all balances at once
+        setAccountBalances(freshBalances);
+        
+        // Update the account list with fresh balances
+        setAccountList(prevList => 
+          prevList ? prevList.map(acc => ({
+            ...acc,
+            balance: freshBalances[acc.loginid] || acc.balance || 0
+          })) : prevList
+        );
+        
+        // Update current user's balance if it's in the fresh balances
+        if (user && freshBalances[user.loginid] !== undefined) {
+          setUser(prevUser => prevUser ? {
+            ...prevUser,
+            balance: freshBalances[user.loginid]
+          } : prevUser);
         }
         
         // Switch back to current user's account
         if (user) {
           try {
             await derivAPI.sendRequest({
-              authorize: localStorage.getItem('deriv_token'),
+              authorize: token,
               loginid: user.loginid
             });
+            console.log(`Switched back to current account: ${user.loginid}`);
           } catch (error) {
             console.warn('Failed to switch back to current account:', error);
           }
         }
+        
+        console.log('All account balances fetched:', freshBalances);
       }
     };
 
-    fetchAccountBalances();
-  }, [accountList, loginMethod]);
+    // Only fetch balances when we have all required data and haven't fetched yet
+    if (accountList && loginMethod === 'oauth' && token && Object.keys(accountBalances).length === 0) {
+      fetchAccountBalances();
+    }
+  }, [accountList, loginMethod, token, accountBalances, user]);
 
   // Check for saved token on mount
   useEffect(() => {
@@ -190,7 +201,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }));
           setAccountList(accounts);
           
-          // Initialize account balances
+          // Initialize account balances with data from account list
           const initialBalances: Record<string, number> = {};
           accounts.forEach(account => {
             initialBalances[account.loginid] = account.balance || 0;
@@ -198,6 +209,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setAccountBalances(initialBalances);
           
           console.log('Account list loaded:', accounts.length, 'accounts');
+          console.log('Initial balances set:', initialBalances);
         } else if (method === 'token') {
           // For token login, don't store account list to prevent switching
           setAccountList(null);
@@ -272,7 +284,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         setUser(userData);
         
-        // Update account balances with fresh data
+        // Update account balances with fresh data from the switch
         setAccountBalances(prev => ({
           ...prev,
           [loginid]: response.authorize.balance
@@ -287,7 +299,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           ) : prevList
         );
         
-        console.log('Successfully switched to account:', loginid, 'Balance:', response.authorize.balance);
+        console.log('Successfully switched to account:', loginid, 'Balance:', response.authorize.balance, response.authorize.currency);
       } else {
         throw new Error('Failed to switch account - no authorization response');
       }

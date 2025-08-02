@@ -243,6 +243,14 @@ class DerivAPI {
     return this.sendRequest({ balance: 1, subscribe: 1 });
   }
 
+  async getAccountBalance(loginid?: string): Promise<any> {
+    const request: any = { balance: 1 };
+    if (loginid) {
+      request.loginid = loginid;
+    }
+    return this.sendRequest(request);
+  }
+
   async subscribeTicks(symbol: string): Promise<void> {
     if (!this.isConnected) {
       throw new Error('WebSocket is not connected');

@@ -78,7 +78,7 @@ const Login: React.FC = () => {
             Welcome to AI Powered LDP Binary Analyzer
           </h1>
           <p className="mt-2 text-sm text-gray-400">
-            Connect your Deriv account to start analyzing and trading
+            Get Analysis of Deriv Digits, AI Trading Signals and Indept Analytics of your trading
           </p>
         </div>
 

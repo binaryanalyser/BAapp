@@ -75,7 +75,7 @@ const Login: React.FC = () => {
         <div className="bg-gray-800 rounded-lg p-8 border border-gray-700">
           {/* OAuth Login Section */}
           <div className="mb-8">
-            <h3 className="text-lg font-medium text-white mb-4 text-center"> Login </h3>
+            <h3 className="text-lg font-medium text-white mb-4 text-center"> Connect your Deriv account </h3>
             <button
               onClick={handleDerivLogin}
               className="w-full flex items-center justify-center space-x-3 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-medium rounded-md transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"

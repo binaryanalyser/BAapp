@@ -30,11 +30,13 @@ interface AuthContextType {
   isLoading: boolean;
   accountList: AccountListItem[] | null;
   loginMethod: 'oauth' | 'token' | null;
+  accountBalances: Record<string, number>;
   login: (token: string) => Promise<void>;
   loginWithOAuth: (token: string) => Promise<void>;
   logout: () => void;
   updateBalance: (balance: number) => void;
   switchAccount: (loginid: string) => Promise<void>;
+  handleTokenLogin: (token: string, method?: 'oauth' | 'token') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -58,7 +60,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [accountList, setAccountList] = useState<AccountListItem[] | null>(null);
   const [loginMethod, setLoginMethod] = useState<'oauth' | 'token' | null>(null);
-  const [accountBalances, setAccountBalances] = useState<{[key: string]: number}>({});
+  const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -72,9 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (savedToken) {
       handleTokenLogin(savedToken, savedLoginMethod || 'token').catch(error => {
         console.error('Failed to restore session:', error);
-        // Clear invalid session
-        localStorage.removeItem('deriv_token');
-        localStorage.removeItem('deriv_login_method');
+        // Don't clear token immediately, let user try manual login
         setIsLoading(false);
       });
     } else {
@@ -338,11 +338,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading,
     accountList,
     loginMethod,
+    accountBalances,
     login,
     loginWithOAuth,
     logout,
     updateBalance,
-    switchAccount
+    switchAccount,
+    handleTokenLogin
   };
 
   return (

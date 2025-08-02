@@ -81,6 +81,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           const freshBalances: Record<string, number> = {};
           
+        }
+      }
+    }
     // Only fetch balances when we have all required data and haven't fetched yet
     if (accountList && accountList.length > 0 && loginMethod === 'oauth' && token && Object.keys(accountBalances).length === 0) {
       (async () => {

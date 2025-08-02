@@ -67,6 +67,9 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   };
 
   const getLastDigit = (price: number, decimals: number) => {
+    if (typeof price !== 'number' || isNaN(price)) {
+      return 0;
+    }
     const fixedPrice = price.toFixed(decimals);
     return parseInt(fixedPrice.slice(-1));
   };

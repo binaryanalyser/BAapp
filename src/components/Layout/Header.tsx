@@ -61,12 +61,6 @@ const Header: React.FC = () => {
 
             {isAuthenticated && user ? (
               <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <div className="text-sm text-gray-300">{user.loginid}</div>
-                  <div className="text-xs text-green-400">
-                    {user.balance.toFixed(2)} {user.currency}
-                  </div>
-                </div>
                 <button
                   onClick={logout}
                   className="p-2 text-gray-400 hover:text-white transition-colors"

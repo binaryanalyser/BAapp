@@ -281,7 +281,7 @@ class DerivAPI {
   }
 
   async buyContract(parameters: any): Promise<ContractResponse> {
-    return this.sendRequest({ buy: 1, parameters_for_contract_purchase: parameters });
+    return this.sendRequest({ buy: 1, ...parameters });
   }
 
   async getContractsFor(symbol: string): Promise<any> {

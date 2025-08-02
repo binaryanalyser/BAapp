@@ -88,10 +88,18 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   // Load trading history from Deriv when user logs in
   useEffect(() => {
     if (isAuthenticated && user) {
-      Promise.all([
-        loadTradingHistory(),
-        loadOpenTrades()
-      ]);
+      // Load both trading history and open trades when user logs in
+      loadTradingHistory();
+      loadOpenTrades();
+      
+      // Set up periodic refresh of open trades every 30 seconds
+      const openTradesInterval = setInterval(() => {
+        loadOpenTrades();
+      }, 30000);
+      
+      return () => {
+        clearInterval(openTradesInterval);
+      };
     }
   }, [isAuthenticated, user]);
 
@@ -191,16 +199,21 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
 
   const loadOpenTrades = async () => {
     if (!isAuthenticated || !derivAPI.getConnectionStatus()) {
+      console.log('Cannot load open trades: not authenticated or not connected');
       return;
     }
 
+    console.log('Loading open trades from Deriv...');
     setIsLoading(true);
     try {
       // Get portfolio (open positions)
       const portfolioResponse = await derivAPI.getPortfolio();
+      console.log('Portfolio response:', portfolioResponse);
 
       if (portfolioResponse.portfolio && portfolioResponse.portfolio.contracts) {
         const openTrades = portfolioResponse.portfolio.contracts.map((contract: any) => {
+          console.log('Processing contract:', contract);
+          
           // Parse contract type from shortcode or longcode
           let contractType: Trade['type'] = 'CALL';
           const shortcode = contract.shortcode || '';
@@ -215,6 +228,11 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           } else if (shortcode.includes('DIGITDIFF') || longcode.toLowerCase().includes('differs')) {
             contractType = 'DIGITDIFF';
           }
+          
+          // Calculate current profit from bid_price if available
+          const currentProfit = contract.bid_price ? 
+            parseFloat(contract.bid_price) - parseFloat(contract.buy_price || '0') : 
+            parseFloat(contract.profit || '0');
 
           return {
             id: `deriv_open_${contract.contract_id}`,
@@ -223,7 +241,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
             type: contractType,
             stake: parseFloat(contract.buy_price || '0'),
             payout: parseFloat(contract.payout || '0'),
-            profit: parseFloat(contract.profit || '0'),
+            profit: currentProfit,
             status: 'open' as const,
             entryTime: (contract.purchase_time || Date.now() / 1000) * 1000,
             entryPrice: parseFloat(contract.entry_tick || '0'),
@@ -233,7 +251,9 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
             longcode: contract.longcode,
             shortcode: contract.shortcode,
             duration: contract.duration || 300,
-            barrier: contract.barrier
+            barrier: contract.barrier,
+            // Store additional Deriv-specific data
+            bidPrice: parseFloat(contract.bid_price || '0')
           };
         });
 
@@ -250,7 +270,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           return allTrades;
         });
 
-        console.log(`Loaded ${openTrades.length} open trades from Deriv`);
+        console.log(`✅ Loaded ${openTrades.length} open trades from Deriv`);
       }
 
     } catch (error) {
@@ -260,13 +280,35 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     }
   };
 
+  // Subscribe to portfolio updates for real-time open trade updates
+  useEffect(() => {
+    if (isAuthenticated && derivAPI.getConnectionStatus()) {
+      const subscribeToPortfolio = async () => {
+        try {
+          // Subscribe to portfolio updates
+          await derivAPI.sendRequest({ 
+            portfolio: 1, 
+            subscribe: 1 
+          });
+          console.log('✅ Subscribed to portfolio updates');
+        } catch (error) {
+          console.warn('Failed to subscribe to portfolio updates:', error);
+        }
+      };
+      
+      subscribeToPortfolio();
+    }
+  }, [isAuthenticated]);
+
   const sellTrade = async (contractId: string) => {
     if (!isAuthenticated || !derivAPI.getConnectionStatus()) {
       throw new Error('Not connected to Deriv API');
     }
 
     try {
+      console.log('Selling trade with contract ID:', contractId);
       const response = await derivAPI.sellContract(parseInt(contractId));
+      console.log('Sell response:', response);
       
       if (response.sell) {
         // Update the trade status locally
@@ -285,7 +327,10 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           return trade;
         }));
 
-        console.log('Trade sold successfully:', response.sell);
+        console.log('✅ Trade sold successfully:', response.sell);
+        
+        // Refresh open trades after selling
+        setTimeout(() => loadOpenTrades(), 1000);
         return response.sell;
       } else {
         throw new Error('Failed to sell contract');
@@ -297,10 +342,12 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   };
 
   const syncWithDeriv = async () => {
+    console.log('🔄 Syncing with Deriv...');
     await Promise.all([
       loadTradingHistory(),
       loadOpenTrades()
     ]);
+    console.log('✅ Sync with Deriv completed');
   };
 
   const addTrade = (trade: Omit<Trade, 'id'>) => {

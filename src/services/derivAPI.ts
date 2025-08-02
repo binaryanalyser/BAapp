@@ -302,6 +302,13 @@ class DerivAPI {
     return this.sendRequest({ portfolio: 1 });
   }
 
+  async subscribeToPortfolio(): Promise<any> {
+    return this.sendRequest({ 
+      portfolio: 1, 
+      subscribe: 1 
+    });
+  }
+
   async switchAccount(loginid: string): Promise<any> {
     return this.sendRequest({ 
       authorize: this.getStoredToken(),

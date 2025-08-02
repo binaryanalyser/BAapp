@@ -77,9 +77,9 @@ const Login: React.FC = () => {
           <h1 className="mt-6 text-3xl font-extrabold text-white">
             Welcome to AI Powered LDP Binary Analyzer
           </h1>
-          <p className="mt-2 text-sm text-gray-400">
+          <h2 className="mt-2 text-sm text-gray-400">
             Get Analysis of Deriv Digits, AI Trading Signals and Indept Analytics of your trading
-          </p>
+          </h2>
         </div>
 
         <div className="bg-gray-800 rounded-lg p-8 border border-gray-700">

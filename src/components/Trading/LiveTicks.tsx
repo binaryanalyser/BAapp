@@ -783,6 +783,29 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         </div>
       </div>
 
+      {/* Analysis Tabs */}
+      <div className="mb-6">
+        <div className="flex space-x-1 bg-gray-700 rounded-lg p-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-gray-900 text-white border border-gray-500'
+                    : 'text-gray-300 hover:text-white hover:bg-gray-600'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Current Price Display */}
       {currentTick && (
         <div className="mb-6 bg-gray-750 rounded-lg p-4">
@@ -812,29 +835,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         </div>
       ) : (
         <>
-          {/* Analysis Tabs */}
-          <div className="mb-6">
-            <div className="flex space-x-1 bg-gray-700 rounded-lg p-1">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                      activeTab === tab.id
-                        ? 'bg-gray-900 text-white border border-gray-500'
-                        : 'text-gray-300 hover:text-white hover:bg-gray-600'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="hidden sm:inline">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Price Chart */}
           <div className="mb-6">
             <h4 className="text-lg font-medium text-white mb-3">Price Movement</h4>

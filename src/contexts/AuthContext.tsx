@@ -30,13 +30,11 @@ interface AuthContextType {
   isLoading: boolean;
   accountList: AccountListItem[] | null;
   loginMethod: 'oauth' | 'token' | null;
-  accountBalances: Record<string, number>;
   login: (token: string) => Promise<void>;
   loginWithOAuth: (token: string) => Promise<void>;
   logout: () => void;
   updateBalance: (balance: number) => void;
   switchAccount: (loginid: string) => Promise<void>;
-  handleTokenLogin: (token: string, method?: 'oauth' | 'token') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,6 +58,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [accountList, setAccountList] = useState<AccountListItem[] | null>(null);
   const [loginMethod, setLoginMethod] = useState<'oauth' | 'token' | null>(null);
+  const [accountBalances, setAccountBalances] = useState<{[key: string]: number}>({});
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -68,18 +67,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Fetch balances for all accounts when account list is available
   useEffect(() => {
-  const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
+    const savedToken = localStorage.getItem('deriv_token');
     const savedLoginMethod = localStorage.getItem('deriv_login_method') as 'oauth' | 'token' | null;
     if (savedToken) {
       handleTokenLogin(savedToken, savedLoginMethod || 'token').catch(error => {
         console.error('Failed to restore session:', error);
-        // Don't clear token immediately, let user try manual login
+        // Clear invalid session
+        localStorage.removeItem('deriv_token');
+        localStorage.removeItem('deriv_login_method');
         setIsLoading(false);
       });
     } else {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
     try {
@@ -148,17 +149,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (error instanceof Error && error.message.includes('InvalidToken')) {
         localStorage.removeItem('deriv_token');
         localStorage.removeItem('deriv_login_method');
-      handleTokenLogin(savedToken, savedLoginMethod || 'token').catch(error => {
-        console.error('Failed to restore session:', error);
-        // Clear invalid session
-        localStorage.removeItem('deriv_token');
-        localStorage.removeItem('deriv_login_method');
-        setIsLoading(false);
-      });
+      }
+      throw error;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  };
 
   const login = async (authToken: string) => {
     await handleTokenLogin(authToken, 'token');

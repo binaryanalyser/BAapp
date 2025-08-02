@@ -374,6 +374,10 @@ class DerivAPI {
     return this.sendRequest({ portfolio: 1 });
   }
 
+  async sendRequest(request: any, timeout: number = 30000): Promise<any> {
+    return this.sendRequest(request, timeout);
+  }
+
   async getProposalOpenContract(contractId: number): Promise<any> {
     return this.sendRequest({ 
       proposal_open_contract: 1,

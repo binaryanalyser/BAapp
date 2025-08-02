@@ -30,6 +30,7 @@ interface AuthContextType {
   isLoading: boolean;
   accountList: AccountListItem[] | null;
   loginMethod: 'oauth' | 'token' | null;
+  accountBalances: Record<string, number>;
   login: (token: string) => Promise<void>;
   loginWithOAuth: (token: string) => Promise<void>;
   logout: () => void;
@@ -58,6 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [accountList, setAccountList] = useState<AccountListItem[] | null>(null);
   const [loginMethod, setLoginMethod] = useState<'oauth' | 'token' | null>(null);
+  const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -67,37 +69,68 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Fetch balances for all accounts when account list is available
   useEffect(() => {
     const fetchAccountBalances = async () => {
-      if (accountList && accountList.length > 1 && loginMethod === 'oauth') {
+      if (accountList && accountList.length > 0 && loginMethod === 'oauth') {
         console.log('Fetching balances for all accounts...');
         
-        // Update balances from the account list data
+        // Initialize balances from the account list data
         const balances: Record<string, number> = {};
         accountList.forEach(account => {
           balances[account.loginid] = account.balance || 0;
         });
         setAccountBalances(balances);
         
-        // Try to get fresh balance for current account
-        if (user && isAuthenticated) {
+        // Fetch fresh balances for all accounts
+        for (const account of accountList) {
           try {
-            const balanceResponse = await derivAPI.getBalance();
-            if (balanceResponse.balance) {
-              const freshBalance = balanceResponse.balance.balance;
+            // Switch to each account temporarily to get fresh balance
+            const switchResponse = await derivAPI.sendRequest({
+              authorize: localStorage.getItem('deriv_token'),
+              loginid: account.loginid
+            });
+            
+            if (switchResponse.authorize) {
+              const freshBalance = switchResponse.authorize.balance;
               setAccountBalances(prev => ({
                 ...prev,
-                [user.loginid]: freshBalance
+                [account.loginid]: freshBalance
               }));
-              updateBalance(freshBalance);
+              
+              // Update the account list with fresh balance
+              setAccountList(prevList => 
+                prevList ? prevList.map(acc => 
+                  acc.loginid === account.loginid 
+                    ? { ...acc, balance: freshBalance }
+                    : acc
+                ) : prevList
+              );
+              
+              // If this is the current user, update their balance too
+              if (user && account.loginid === user.loginid) {
+                updateBalance(freshBalance);
+              }
             }
           } catch (error) {
-            console.warn('Failed to fetch current account balance:', error);
+            console.warn(`Failed to fetch balance for account ${account.loginid}:`, error);
+          }
+        }
+        
+        // Switch back to current user's account
+        if (user) {
+          try {
+            await derivAPI.sendRequest({
+              authorize: localStorage.getItem('deriv_token'),
+              loginid: user.loginid
+            });
+          } catch (error) {
+            console.warn('Failed to switch back to current account:', error);
           }
         }
       }
     };
 
     fetchAccountBalances();
-  }, [accountList, user?.loginid, isAuthenticated, loginMethod]);
+  }, [accountList, loginMethod]);
+
   // Check for saved token on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('deriv_token');
@@ -148,7 +181,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             loginid: account.loginid,
             currency: account.currency,
             is_virtual: account.is_virtual,
-            balance: account.balance,
+            balance: account.balance || 0,
             email: account.email,
             account_type: account.account_type,
             broker: account.broker,
@@ -156,10 +189,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             landing_company_name: account.landing_company_name
           }));
           setAccountList(accounts);
+          
+          // Initialize account balances
+          const initialBalances: Record<string, number> = {};
+          accounts.forEach(account => {
+            initialBalances[account.loginid] = account.balance || 0;
+          });
+          setAccountBalances(initialBalances);
+          
           console.log('Account list loaded:', accounts.length, 'accounts');
         } else if (method === 'token') {
           // For token login, don't store account list to prevent switching
           setAccountList(null);
+          setAccountBalances({});
           console.log('Token login - account switching disabled');
         }
 
@@ -211,105 +253,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       console.log('Switching to account:', loginid);
       
-      // Try authorize with loginid parameter to switch account
-      try {
-        const response = await derivAPI.sendRequest({ 
-          authorize: token,
-          loginid: loginid
-        });
+      // Switch account using authorize with loginid
+      const response = await derivAPI.sendRequest({ 
+        authorize: token,
+        loginid: loginid
+      });
+      
+      if (response.authorize) {
+        const userData: User = {
+          loginid: response.authorize.loginid,
+          email: response.authorize.email,
+          fullname: response.authorize.fullname,
+          currency: response.authorize.currency,
+          balance: response.authorize.balance,
+          is_virtual: response.authorize.is_virtual,
+          country: response.authorize.country
+        };
         
-        if (response.authorize) {
-          const userData: User = {
-            loginid: response.authorize.loginid,
-            email: response.authorize.email,
-            fullname: response.authorize.fullname,
-            currency: response.authorize.currency,
-            balance: response.authorize.balance,
-            is_virtual: response.authorize.is_virtual,
-            country: response.authorize.country
-          };
-          
-          setUser(userData);
-          
-          // Update the account list with fresh balance data
-          if (response.authorize.account_list) {
-            const updatedAccounts: AccountListItem[] = response.authorize.account_list.map((account: any) => ({
-              loginid: account.loginid,
-              currency: account.currency,
-              is_virtual: account.is_virtual,
-              balance: account.balance,
-              email: account.email,
-              account_type: account.account_type,
-              broker: account.broker,
-              is_disabled: account.is_disabled,
-              landing_company_name: account.landing_company_name
-            }));
-            setAccountList(updatedAccounts);
-            
-            // Update local balance tracking
-            setAccountBalances(prev => {
-              const newBalances = { ...prev };
-              updatedAccounts.forEach(acc => {
-                newBalances[acc.loginid] = acc.balance || 0;
-              });
-              return newBalances;
-            });
-          }
-          
-          console.log('Successfully switched to account via authorize:', loginid);
-          return; // Success, exit early
-        }
-      } catch (authorizeError) {
-        console.log('Authorize with loginid failed:', authorizeError);
+        setUser(userData);
+        
+        // Update account balances with fresh data
+        setAccountBalances(prev => ({
+          ...prev,
+          [loginid]: response.authorize.balance
+        }));
+        
+        // Update the account list with fresh balance
+        setAccountList(prevList => 
+          prevList ? prevList.map(acc => 
+            acc.loginid === loginid 
+              ? { ...acc, balance: response.authorize.balance }
+              : acc
+          ) : prevList
+        );
+        
+        console.log('Successfully switched to account:', loginid, 'Balance:', response.authorize.balance);
+      } else {
+        throw new Error('Failed to switch account - no authorization response');
       }
-      
-      // Fallback: Manual account selection from stored account list
-      if (accountList) {
-        const targetAccount = accountList.find(acc => acc.loginid === loginid);
-        if (targetAccount) {
-          const userData: User = {
-            loginid: targetAccount.loginid,
-            email: targetAccount.email || user?.email || '',
-            fullname: user?.fullname || '',
-            currency: targetAccount.currency,
-            balance: targetAccount.balance || 0,
-            is_virtual: targetAccount.is_virtual,
-            country: user?.country || ''
-          };
-          
-          setUser(userData);
-          console.log('Switched to account via local data:', loginid);
-          
-          // Try to get fresh balance
-          try {
-            const balanceResponse = await derivAPI.getBalance();
-            if (balanceResponse.balance) {
-              const freshBalance = balanceResponse.balance.balance;
-              updateBalance(freshBalance);
-              
-              // Update the account list with the fresh balance
-              setAccountList(prevList => 
-                prevList ? prevList.map(acc => 
-                  acc.loginid === loginid 
-                    ? { ...acc, balance: freshBalance }
-                    : acc
-                ) : prevList
-              );
-              
-              // Update local balance tracking
-              setAccountBalances(prev => ({
-                ...prev,
-                [loginid]: freshBalance
-              }));
-            }
-          } catch (balanceError) {
-            console.warn('Failed to get balance after local switch:', balanceError);
-          }
-          return; // Success
-        }
-      }
-      
-      throw new Error('All account switch methods failed');
       
     } catch (error) {
       console.error('Account switch failed:', error);
@@ -319,35 +300,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Get updated balance for the new account
-  const getUpdatedBalance = async () => {
-    try {
-      const balanceResponse = await derivAPI.getBalance();
-      if (balanceResponse.balance) {
-        updateBalance(balanceResponse.balance.balance);
-        
-        // Update the account list with the fresh balance
-        if (user) {
-          setAccountList(prevList => 
-            prevList ? prevList.map(acc => 
-              acc.loginid === user.loginid 
-                ? { ...acc, balance: balanceResponse.balance.balance }
-                : acc
-            ) : prevList
-          );
-        }
-      }
-    } catch (balanceError) {
-      console.warn('Failed to get balance after account switch:', balanceError);
-    }
-  };
-
   const logout = () => {
     setUser(null);
     setToken(null);
     setLoginMethod(null);
     setIsAuthenticated(false);
     setAccountList(null);
+    setAccountBalances({});
     localStorage.removeItem('deriv_token');
     localStorage.removeItem('deriv_login_method');
     // Don't disconnect API as it might be used by other parts of the app
@@ -357,6 +316,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const updateBalance = (balance: number) => {
     if (user) {
       setUser({ ...user, balance });
+      
+      // Update account balances
+      setAccountBalances(prev => ({
+        ...prev,
+        [user.loginid]: balance
+      }));
       
       // Also update the balance in the account list
       setAccountList(prevList => 
@@ -376,6 +341,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading,
     accountList,
     loginMethod,
+    accountBalances,
     login,
     loginWithOAuth,
     logout,

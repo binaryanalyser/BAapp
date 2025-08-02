@@ -4,7 +4,7 @@ import { BarChart3, User, LogOut, Menu, X, ChevronDown, RefreshCw } from 'lucide
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header: React.FC = () => {
-  const { user, isAuthenticated, logout, accountList, switchAccount, isLoading, loginMethod } = useAuth();
+  const { user, isAuthenticated, logout, accountList, switchAccount, isLoading, loginMethod, accountBalances } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
@@ -52,11 +52,12 @@ const Header: React.FC = () => {
 
   // Get display balance for an account
   const getAccountBalance = (account: any): number => {
-    // If this is the current user, use their live balance
-    if (user && account.loginid === user.loginid) {
-      return user.balance;
+    // First try to get balance from accountBalances (most up-to-date)
+    if (accountBalances && accountBalances[account.loginid] !== undefined) {
+      return accountBalances[account.loginid];
     }
-    // Otherwise use the account's stored balance
+    
+    // Fallback to account's stored balance
     return account.balance ?? 0;
   };
 
@@ -154,11 +155,6 @@ const Header: React.FC = () => {
                                       ACTIVE
                                     </div>
                                   )}
-                                  {!isCurrentAccount && (
-                                    <div className="text-xs text-gray-400 mt-1">
-                                      {account.currency}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             </button>
@@ -168,6 +164,15 @@ const Header: React.FC = () => {
                           {/* Account Summary */}
                           <div className="mt-2 pt-2 border-t border-gray-600">
                             <div className="px-3 py-2 text-xs text-gray-400">
+                              <div className="flex justify-between items-center mb-2">
+                                <span>Total Balance:</span>
+                                <span className="font-medium text-green-400">
+                                  {formatBalance(
+                                    accountList.reduce((total, acc) => total + getAccountBalance(acc), 0),
+                                    user.currency
+                                  )}
+                                </span>
+                              </div>
                               <div className="flex justify-between items-center">
                                 <span>Total Accounts:</span>
                                 <span className="font-medium">{accountList.length}</span>

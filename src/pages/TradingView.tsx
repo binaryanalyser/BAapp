@@ -6,6 +6,7 @@ import { useTradingContext } from '../contexts/TradingContext';
 import ErrorBoundary from '../components/UI/ErrorBoundary';
 import AssetAnalysis from '../components/Trading/AssetAnalysis';
 import AssetSelector from '../components/Trading/AssetSelector';
+import QuickTrade from '../components/Trading/QuickTrade';
 import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause, RefreshCw, Download, X } from 'lucide-react';
 
 const TradingView: React.FC = () => {

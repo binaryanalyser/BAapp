@@ -81,31 +81,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           const freshBalances: Record<string, number> = {};
           
-        }
-      }
-    }
-    // Only fetch balances when we have all required data and haven't fetched yet
-    if (accountList && accountList.length > 0 && loginMethod === 'oauth' && token && Object.keys(accountBalances).length === 0) {
-      (async () => {
-        console.log('Fetching balances for all accounts...');
-        
-        try {
-          const freshBalances: Record<string, number> = {};
+          if (balanceResponse.balance) {
+            // Handle single account balance response
+            if (balanceResponse.balance.loginid) {
+              freshBalances[balanceResponse.balance.loginid] = balanceResponse.balance.balance;
+            }
+          }
           
           // For OAuth, we need to get balances for each account individually
           for (const account of accountList) {
             try {
               console.log(`Fetching balance for account: ${account.loginid}`);
               
-              // Authorize with specific loginid to get fresh balance
-              const balanceResponse = await derivAPI.sendRequest({
+              // Switch to account and get balance
+              const accountResponse = await derivAPI.sendRequest({
                 authorize: token,
                 loginid: account.loginid
               });
               
-              if (balanceResponse.authorize && balanceResponse.authorize.balance !== undefined) {
-                freshBalances[account.loginid] = balanceResponse.authorize.balance;
-                console.log(`Balance for ${account.loginid}: ${balanceResponse.authorize.balance} ${account.currency}`);
+              if (accountResponse.authorize && accountResponse.authorize.balance !== undefined) {
+                freshBalances[account.loginid] = accountResponse.authorize.balance;
+                console.log(`Balance for ${account.loginid}: ${accountResponse.authorize.balance} ${account.currency}`);
               } else {
                 // Fallback to account list balance
                 freshBalances[account.loginid] = account.balance || 0;
@@ -160,7 +156,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           });
           setAccountBalances(fallbackBalances);
         }
-      })();
+      }
+    };
+
+    // Only fetch balances when we have all required data and haven't fetched yet
+    if (accountList && loginMethod === 'oauth' && token && Object.keys(accountBalances).length === 0) {
+      fetchAccountBalances();
     }
   }, [accountList, loginMethod, token, accountBalances, user]);
 

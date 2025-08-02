@@ -374,15 +374,10 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
           {/* Trade Higher Button */}
           <button
             onClick={() => handleTradeAction('CALL')}
-            disabled={isTrading || !user || !currentPrice || isLoadingProposal}
+            disabled={!user || !currentPrice || isLoadingProposal}
             className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 shadow-green-500/25"
           >
-            {isTrading && selectedContract === 'CALL' ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span className="text-sm">Placing...</span>
-              </>
-            ) : isLoadingProposal ? (
+            {isLoadingProposal ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 <span className="text-sm">Loading...</span>
@@ -399,15 +394,10 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
           {/* Trade Lower Button */}
           <button
             onClick={() => handleTradeAction('PUT')}
-            disabled={isTrading || !user || !currentPrice || isLoadingProposal}
+            disabled={!user || !currentPrice || isLoadingProposal}
             className="disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-6 px-4 rounded-xl transition-all duration-300 flex flex-col items-center justify-center space-y-2 transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 shadow-red-500/25"
           >
-            {isTrading && selectedContract === 'PUT' ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span className="text-sm">Placing...</span>
-              </>
-            ) : isLoadingProposal ? (
+            {isLoadingProposal ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 <span className="text-sm">Loading...</span>

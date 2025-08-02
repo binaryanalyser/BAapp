@@ -66,6 +66,7 @@ class DerivAPI {
   private tickListeners: Array<(data: TickData) => void> = [];
   private connectionListeners: Array<(connected: boolean) => void> = [];
   private subscriptions = new Map<string, string>(); // symbol -> subscription_id
+  private portfolioListeners: Array<(data: any) => void> = [];
   private readonly APP_ID = '88454';
   private readonly WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=88454`;
   private requestCallbacks = new Map<number, { resolve: Function; reject: Function; timeout: NodeJS.Timeout }>();
@@ -194,9 +195,14 @@ class DerivAPI {
         this.subscriptions.set(symbol, data.subscription.id);
       }
     }
+
+    // Handle portfolio updates
+    if (data.portfolio) {
+      this.portfolioListeners.forEach(listener => listener(data));
+    }
   }
 
-  private sendRequest(request: any, timeout: number = 30000): Promise<any> {
+  sendRequest(request: any, timeout: number = 30000): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.isConnected || !this.ws) {
         // Try to reconnect if not connected
@@ -307,6 +313,18 @@ class DerivAPI {
       portfolio: 1, 
       subscribe: 1 
     });
+  }
+
+  // Portfolio update listeners
+  onPortfolioUpdate(callback: (data: any) => void): void {
+    this.portfolioListeners.push(callback);
+  }
+
+  offPortfolioUpdate(callback: (data: any) => void): void {
+    const index = this.portfolioListeners.indexOf(callback);
+    if (index > -1) {
+      this.portfolioListeners.splice(index, 1);
+    }
   }
 
   async switchAccount(loginid: string): Promise<any> {

@@ -68,6 +68,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(false);
   const [expiryTimeouts, setExpiryTimeouts] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const { user, isAuthenticated, accountList } = useAuth();
+  const [portfolioSubscriptionId, setPortfolioSubscriptionId] = useState<string | null>(null);
 
   // Load trades from localStorage on mount
   useEffect(() => {
@@ -285,8 +286,11 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     if (isAuthenticated && derivAPI.getConnectionStatus()) {
       const subscribeToPortfolio = async () => {
         try {
-          // Subscribe to portfolio updates using the dedicated method
-          await derivAPI.subscribeToPortfolio();
+          // Subscribe to portfolio updates and store subscription ID
+          const response = await derivAPI.subscribeToPortfolio();
+          if (response.subscription?.id) {
+            setPortfolioSubscriptionId(response.subscription.id);
+          }
           console.log('✅ Subscribed to portfolio updates');
         } catch (error) {
           console.warn('Failed to subscribe to portfolio updates:', error);
@@ -294,8 +298,103 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       };
       
       subscribeToPortfolio();
+      
+      // Set up periodic sync every 30 seconds
+      const syncInterval = setInterval(() => {
+        loadOpenTrades();
+      }, 30000);
+      
+      return () => {
+        clearInterval(syncInterval);
+        // Unsubscribe from portfolio updates
+        if (portfolioSubscriptionId) {
+          derivAPI.sendRequest({ forget: portfolioSubscriptionId }).catch(console.warn);
+        }
+      };
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, portfolioSubscriptionId]);
+
+  // Handle portfolio updates from WebSocket
+  useEffect(() => {
+    const handlePortfolioUpdate = (data: any) => {
+      if (data.portfolio) {
+        console.log('📊 Portfolio update received:', data.portfolio);
+        
+        // Process portfolio update
+        if (data.portfolio.contracts) {
+          const updatedOpenTrades = data.portfolio.contracts.map((contract: any) => {
+            const contractType = parseContractType(contract.shortcode, contract.longcode);
+            const currentProfit = contract.bid_price ? 
+              parseFloat(contract.bid_price) - parseFloat(contract.buy_price || '0') : 
+              parseFloat(contract.profit || '0');
+
+            return {
+              id: `deriv_open_${contract.contract_id}`,
+              symbol: contract.underlying || contract.symbol || 'R_10',
+              account_loginid: user?.loginid,
+              type: contractType,
+              stake: parseFloat(contract.buy_price || '0'),
+              payout: parseFloat(contract.payout || '0'),
+              profit: currentProfit,
+              status: 'open' as const,
+              entryTime: (contract.purchase_time || Date.now() / 1000) * 1000,
+              entryPrice: parseFloat(contract.entry_tick || '0'),
+              contractId: contract.contract_id?.toString(),
+              transactionId: contract.transaction_id?.toString(),
+              purchaseTime: contract.purchase_time,
+              longcode: contract.longcode,
+              shortcode: contract.shortcode,
+              duration: contract.duration || 300,
+              barrier: contract.barrier,
+              bidPrice: parseFloat(contract.bid_price || '0')
+            };
+          });
+
+          // Update trades with real-time portfolio data
+          setTrades(prevTrades => {
+            // Remove existing Deriv open trades for this account
+            const filteredTrades = prevTrades.filter(trade => 
+              !trade.id.startsWith('deriv_open_') || trade.account_loginid !== user?.loginid
+            );
+            
+            // Add updated open trades and sort by entry time
+            const allTrades = [...updatedOpenTrades, ...filteredTrades].sort((a, b) => b.entryTime - a.entryTime);
+            
+            return allTrades;
+          });
+        } else if (data.portfolio.contracts === null || data.portfolio.contracts.length === 0) {
+          // No open contracts - remove all open trades for this account
+          console.log('📊 No open contracts - clearing open trades');
+          setTrades(prevTrades => 
+            prevTrades.filter(trade => 
+              !trade.id.startsWith('deriv_open_') || trade.account_loginid !== user?.loginid
+            )
+          );
+        }
+      }
+    };
+
+    // Listen for portfolio updates
+    derivAPI.onPortfolioUpdate(handlePortfolioUpdate);
+    
+    return () => {
+      derivAPI.offPortfolioUpdate(handlePortfolioUpdate);
+    };
+  }, [user?.loginid]);
+
+  // Helper function to parse contract type
+  const parseContractType = (shortcode: string = '', longcode: string = ''): Trade['type'] => {
+    if (shortcode.includes('CALL') || longcode.toLowerCase().includes('rise')) {
+      return 'CALL';
+    } else if (shortcode.includes('PUT') || longcode.toLowerCase().includes('fall')) {
+      return 'PUT';
+    } else if (shortcode.includes('DIGITMATCH') || longcode.toLowerCase().includes('matches')) {
+      return 'DIGITMATCH';
+    } else if (shortcode.includes('DIGITDIFF') || longcode.toLowerCase().includes('differs')) {
+      return 'DIGITDIFF';
+    }
+    return 'CALL'; // Default fallback
+  };
 
   const sellTrade = async (contractId: string) => {
     if (!isAuthenticated || !derivAPI.getConnectionStatus()) {
@@ -303,26 +402,41 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     }
 
     try {
-      console.log('Switching to account:', loginid);
       console.log('Selling trade with contract ID:', contractId);
       const response = await derivAPI.sellContract(parseInt(contractId));
-      console.log('Switch account response:', response);
+      console.log('Sell contract response:', response);
       
-      if (response.authorize) {
-        console.log('✅ Account switched successfully to:', loginid);
+      if (response.sell) {
+        console.log('✅ Trade sold successfully');
         
-        // Load trading data for the new account
-        await Promise.all([
-          loadTradingHistory(),
-          loadOpenTrades()
-        ]);
+        // Update the trade status locally
+        const sellPrice = response.sell.sold_for;
+        const contractIdStr = contractId.toString();
         
-        return response.authorize;
+        setTrades(prevTrades => prevTrades.map(trade => {
+          if (trade.contractId === contractIdStr) {
+            const profit = sellPrice - trade.stake;
+            return {
+              ...trade,
+              status: profit >= 0 ? 'won' : 'lost',
+              profit: profit,
+              payout: sellPrice,
+              exitTime: Date.now(),
+              exitPrice: response.sell.exit_tick || trade.entryPrice
+            };
+          }
+          return trade;
+        }));
+        
+        // Refresh open trades to sync with Deriv
+        await loadOpenTrades();
+        
+        return response.sell;
       } else {
-        throw new Error('Failed to switch account');
+        throw new Error('Failed to sell trade');
       }
     } catch (error) {
-      console.error('Failed to switch account:', error);
+      console.error('Failed to sell trade:', error);
       throw error;
     }
   };
@@ -347,53 +461,31 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     // Set up expiry timeout if trade has duration
     if (newTrade.duration && newTrade.status === 'open') {
       const timeoutId = setTimeout(() => {
-        expireTrade(newTrade.id);
+        expireLocalTrade(newTrade.id);
       }, newTrade.duration * 1000);
       
       setExpiryTimeouts(prev => new Map(prev).set(newTrade.id, timeoutId));
     }
   };
 
-  const updateTrade = (id: string, updates: Partial<Trade>) => {
-    setTrades(prev => prev.map(trade => 
-      trade.id === id ? { ...trade, ...updates } : trade
-    ));
-
-    // Clear timeout if trade is being closed manually
-    if (updates.status && updates.status !== 'open') {
-      const timeout = expiryTimeouts.get(id);
-      if (timeout) {
-        clearTimeout(timeout);
-        setExpiryTimeouts(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(id);
-          return newMap;
-        });
-      }
-    }
-  };
-
-  const expireTrade = (tradeId: string) => {
+  // Expire local trades (not Deriv trades)
+  const expireLocalTrade = (tradeId: string) => {
     setTrades(prev => prev.map(trade => {
-      if (trade.id === tradeId && trade.status === 'open') {
-        // Simulate trade result based on trade type and random market movement
-        const marketMovement = (Math.random() - 0.5) * 0.02; // -1% to +1% movement
+      if (trade.id === tradeId && trade.status === 'open' && !trade.id.startsWith('deriv_')) {
+        // Only expire local trades, not Deriv trades
+        const marketMovement = (Math.random() - 0.5) * 0.02;
         let isWin = false;
         
-        // Determine win/loss based on trade type
         if (trade.type === 'CALL') {
           isWin = marketMovement > 0;
         } else if (trade.type === 'PUT') {
           isWin = marketMovement < 0;
         } else if (trade.type === 'DIGITMATCH') {
-          // For digit match, use random with slight bias
           isWin = Math.random() > 0.6;
         } else if (trade.type === 'DIGITDIFF') {
-          // For digit differs, use random with slight bias
           isWin = Math.random() > 0.4;
         }
         
-        // Add some randomness to make it more realistic (70% accuracy)
         if (Math.random() > 0.7) {
           isWin = !isWin;
         }
@@ -402,16 +494,12 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
         const payout = isWin ? trade.payout : 0;
         const profit = payout - trade.stake;
         
-        // Show notification
-        const notification = {
-          type: isWin ? 'success' : 'error',
-          title: isWin ? 'Trade Won! 🎉' : 'Trade Lost 😞',
-          message: `${trade.symbol} ${trade.type} - ${isWin ? '+' : ''}$${profit.toFixed(2)}`,
-          duration: 5000
-        };
-        
-        // You could dispatch this to a notification system
-        console.log('Trade Result:', notification);
+        console.log('Local trade expired:', {
+          id: trade.id,
+          symbol: trade.symbol,
+          result: isWin ? 'won' : 'lost',
+          profit: profit
+        });
         
         return {
           ...trade,
@@ -431,6 +519,24 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       newMap.delete(tradeId);
       return newMap;
     });
+  };
+  const updateTrade = (id: string, updates: Partial<Trade>) => {
+    setTrades(prev => prev.map(trade => 
+      trade.id === id ? { ...trade, ...updates } : trade
+    ));
+
+    // Clear timeout if trade is being closed manually
+    if (updates.status && updates.status !== 'open') {
+      const timeout = expiryTimeouts.get(id);
+      if (timeout) {
+        clearTimeout(timeout);
+        setExpiryTimeouts(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(id);
+          return newMap;
+        });
+      }
+    }
   };
   const clearTrades = () => {
     setTrades([]);

@@ -169,7 +169,7 @@ const Login: React.FC = () => {
             <div className="text-sm text-gray-400">
               <p className="mb-2">Need to create an API token?</p>
               <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Visit <a href="https://app.deriv.com" className="text-blue-400 hover:text-blue-300" target="_blank" rel="noopener noreferrer">app.deriv.com</a></li>
+                <li>Visit <a href="https://track.deriv.be/_Yqc93056kqA5TVC3w-F7AGNd7ZgqdRLk/143/" className="text-blue-400 hover:text-blue-300" target="_blank" rel="noopener noreferrer">app.deriv.com</a></li>
                 <li>Go to Settings → API Token</li>
                 <li>Create a new token with trading permissions</li>
                 <li>Copy and paste it above</li>

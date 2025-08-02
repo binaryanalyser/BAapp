@@ -37,7 +37,7 @@ const Login: React.FC = () => {
   };
 
   const handleDerivSignup = () => {
-    const signupUrl = 'https://hub.deriv.com/tradershub/signup?t=Yqc93056kqBB4VdSfJsOp2Nd7ZgqdRLk/1/';
+    const signupUrl = 'https://track.deriv.be/_Yqc93056kqA5TVC3w-F7AGNd7ZgqdRLk/1/';
     window.open(signupUrl, '_blank');
   };
 

@@ -292,6 +292,10 @@ class DerivAPI {
     return this.sendRequest({ portfolio: 1 });
   }
 
+  async switchAccount(loginid: string): Promise<any> {
+    return this.sendRequest({ switch_account: loginid });
+  }
+
   async sellContract(contractId: number): Promise<any> {
     return this.sendRequest({ sell: contractId });
   }

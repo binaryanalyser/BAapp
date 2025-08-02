@@ -209,15 +209,17 @@ const TradingView: React.FC = () => {
 
         {/* Main Content Grid */}
         <div className="space-y-6">
+          {/* AI Multi-Asset Analysis - Top Priority */}
+          <ErrorBoundary>
+            <AssetAnalysis selectedSymbol={selectedAsset} />
+          </ErrorBoundary>
+
           {/* Asset Selection */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <AssetSelector 
               selectedAsset={selectedAsset}
               onAssetChange={setSelectedAsset}
             />
-            <ErrorBoundary>
-              <AssetAnalysis selectedSymbol={selectedAsset} />
-            </ErrorBoundary>
           </div>
 
           {/* Trade History - Full Width Below */}

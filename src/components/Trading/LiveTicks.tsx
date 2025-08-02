@@ -50,8 +50,8 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const volatilityIndices = [
     { symbol: 'R_10', label: '10', name: 'Volatility 10', decimals: 3 },
     { symbol: 'R_25', label: '25', name: 'Volatility 25', decimals: 3 },
-    { symbol: 'R_50', label: '50', name: 'Volatility 50', decimals: 4 },
-    { symbol: 'R_75', label: '75', name: 'Volatility 75', decimals: 4 },
+    { symbol: 'R_50', label: '50', name: 'Volatility 50', decimals: 3 },
+    { symbol: 'R_75', label: '75', name: 'Volatility 75', decimals: 3 },
     { symbol: 'R_100', label: '100', name: 'Volatility 100', decimals: 2 }
   ];
 
@@ -70,8 +70,14 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
     if (typeof price !== 'number' || isNaN(price)) {
       return 0;
     }
-    const fixedPrice = price.toFixed(decimals);
-    return parseInt(fixedPrice.slice(-1));
+    // For all volatility indices, we want the last digit of the price
+    // Convert to string with appropriate decimal places and get the last character
+    const priceStr = price.toFixed(decimals);
+    const lastChar = priceStr.slice(-1);
+    const digit = parseInt(lastChar);
+    
+    // If the last character is not a digit (shouldn't happen), return 0
+    return isNaN(digit) ? 0 : digit;
   };
 
   const connectWebSocket = () => {
@@ -126,6 +132,8 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         const decimals = getDecimalPlaces(selectedSymbol);
         const newDigit = getLastDigit(data.tick.tick, decimals);
         
+        console.log(`Processing tick for ${selectedSymbol}: price=${data.tick.tick}, decimals=${decimals}, digit=${newDigit}`);
+        
         setHasReceivedData(true);
         setDigits(prev => [...prev.slice(1), newDigit]);
         setDigitHistory(prev => [...prev, newDigit].slice(-100)); // Keep last 100 digits
@@ -142,6 +150,8 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         const history: HistoryData = data.history;
         const decimals = getDecimalPlaces(selectedSymbol);
         
+        console.log(`Processing history for ${selectedSymbol}: ${history.prices.length} prices, decimals=${decimals}`);
+        
         // Process history data
         const newPrices: number[] = [];
         const newDigits: number[] = [];
@@ -154,21 +164,28 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         // Process full history for analysis
         for (let i = 0; i < historyLength; i++) {
           const price = parseFloat(history.prices[history.prices.length - historyLength + i]);
-          newDigitHistory.push(getLastDigit(price, decimals));
+          const digit = getLastDigit(price, decimals);
+          newDigitHistory.push(digit);
         }
         
         // Process recent data for display
         for (let i = 0; i < displayLength; i++) {
           const price = parseFloat(history.prices[history.prices.length - displayLength + i]);
           const time = history.times[history.times.length - displayLength + i];
+          const digit = getLastDigit(price, decimals);
           
           newPrices.push(price);
-          newDigits.push(getLastDigit(price, decimals));
+          newDigits.push(digit);
           newChartData.push({
             time: time * 1000,
             price: price,
             timestamp: time
           });
+          
+          // Debug log for first few prices
+          if (i < 3) {
+            console.log(`History price ${i}: ${price} -> digit: ${digit}`);
+          }
         }
         
         setPrices(newPrices);
@@ -177,7 +194,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         setChartData(newChartData);
         setHasReceivedData(true);
         setIsLoading(false);
-        console.log('History processed, loading complete');
+        console.log(`History processed for ${selectedSymbol}, loading complete. Digits:`, newDigits.slice(-5));
       }
 
       // Handle subscription confirmation
@@ -230,6 +247,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         wsRef.current?.send(JSON.stringify({
           forget: subscriptionIdRef.current
         }));
+        subscriptionIdRef.current = null;
       }
       
       // Subscribe to new symbol
@@ -266,6 +284,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       setChartData([]);
       setPrices([]);
       setCurrentTick(null);
+      console.log(`Switching to symbol: ${selectedSymbol}`);
       subscribeTo(selectedSymbol);
     }
   }, [selectedSymbol, isConnected]);

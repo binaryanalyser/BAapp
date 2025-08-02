@@ -5,7 +5,7 @@ import { BarChart3 } from 'lucide-react';
 
 const OAuthCallback: React.FC = () => {
   const location = useLocation();
-  const { loginWithOAuth } = useAuth();
+  const { loginWithOAuth, login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -143,19 +143,19 @@ const OAuthCallback: React.FC = () => {
           navigate(redirectUrl, { replace: true });
         } else {
           console.error('No token received in OAuth callback');
-          navigate('/login?error=' + encodeURIComponent('No authentication token received. Please check browser console for details.'), { replace: true });
+          navigate('/login?error=' + encodeURIComponent('No authentication token received from Deriv. Please try again or use API token login.'), { replace: true });
         }
       } catch (err) {
         console.error('OAuth callback error:', err);
         const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
-        navigate('/login?error=' + encodeURIComponent(errorMessage));
+        navigate('/login?error=' + encodeURIComponent('OAuth login failed: ' + errorMessage + '. Please try again or use API token login.'), { replace: true });
       }
     };
 
     // Add a small delay to ensure the URL is fully loaded
-    const timer = setTimeout(handleOAuthCallback, 100);
+    const timer = setTimeout(handleOAuthCallback, 500);
     return () => clearTimeout(timer);
-  }, [location, login, navigate]);
+  }, [location, loginWithOAuth, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
@@ -169,6 +169,10 @@ const OAuthCallback: React.FC = () => {
         <div className="flex items-center justify-center space-x-2">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-400"></div>
           <span className="text-gray-400">Processing authentication...</span>
+        </div>
+        <div className="mt-4 text-xs text-gray-500">
+          <p>If this takes too long, please check the browser console for details</p>
+          <p>or try using API token login instead</p>
         </div>
       </div>
     </div>

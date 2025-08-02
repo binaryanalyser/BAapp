@@ -10,6 +10,16 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const { login, loginWithOAuth } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check for OAuth errors in URL params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const oauthError = urlParams.get('error');
+    if (oauthError) {
+      setError(decodeURIComponent(oauthError));
+    }
+  }, [location]);
 
   const handleDerivLogin = () => {
     // Store current URL for redirect after OAuth

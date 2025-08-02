@@ -7,6 +7,7 @@ const TradingStats: React.FC = () => {
 
   // Calculate real contract data from trades
   const calculateContractData = () => {
+    // Trades are already filtered by account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     const contractTypes = ['CALL', 'PUT', 'DIGITMATCH', 'DIGITDIFF'];
     

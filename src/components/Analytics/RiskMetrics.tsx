@@ -7,6 +7,7 @@ const RiskMetrics: React.FC = () => {
 
   // Calculate risk metrics from actual trades
   const calculateRiskMetrics = () => {
+    // Trades are already filtered by account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     
     if (completedTrades.length === 0) {
@@ -134,6 +135,7 @@ const RiskMetrics: React.FC = () => {
 
   // Calculate risk factors based on actual trading behavior
   const calculateRiskFactors = () => {
+    // Trades are already filtered by account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     
     if (completedTrades.length === 0) {

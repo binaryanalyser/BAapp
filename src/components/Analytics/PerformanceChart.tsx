@@ -7,8 +7,15 @@ const PerformanceChart: React.FC = () => {
 
   // Generate cumulative profit data from actual trades
   const generateChartData = () => {
+    // Filter trades by current account and completed status
     const completedTrades = trades
-      .filter(trade => trade.status !== 'open' && trade.exitTime)
+      .filter(trade => {
+        // Only include completed trades with exit time
+        if (trade.status === 'open' || !trade.exitTime) return false;
+        
+        // Filter by current account (trades are already filtered in TradingContext)
+        return true;
+      })
       .sort((a, b) => a.exitTime! - b.exitTime!);
 
     if (completedTrades.length === 0) {

@@ -6,6 +6,7 @@ const PerformanceMetrics: React.FC = () => {
   const { trades, stats } = useTradingContext();
 
   // Calculate additional metrics
+  // Trades are already filtered by account in TradingContext
   const completedTrades = trades.filter(trade => trade.status !== 'open');
   const avgProfit = completedTrades.length > 0 ? 
     completedTrades.reduce((sum, trade) => sum + trade.profit, 0) / completedTrades.length : 0;
@@ -52,6 +53,7 @@ const PerformanceMetrics: React.FC = () => {
 
   // Calculate weekly trades
   const weekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  // Trades are already filtered by account in TradingContext
   const weeklyTrades = trades.filter(trade => 
     trade.entryTime >= weekAgo
   ).length;

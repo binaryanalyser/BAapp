@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 interface Trade {
   id: string;
   symbol: string;
+  account_loginid?: string; // Track which account this trade belongs to
   type: 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF';
   stake: number;
   duration?: number; // Duration in seconds
@@ -66,7 +67,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expiryTimeouts, setExpiryTimeouts] = useState<Map<string, NodeJS.Timeout>>(new Map());
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, accountList } = useAuth();
 
   // Load trades from localStorage on mount
   useEffect(() => {
@@ -142,6 +143,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           return {
             id: `deriv_${transaction.transaction_id}`,
             symbol: transaction.underlying || transaction.symbol || 'R_10',
+            account_loginid: user?.loginid, // Store which account this trade belongs to
             type: contractType,
             stake: parseFloat(transaction.buy_price || '0'),
             payout: parseFloat(transaction.sell_price || '0'),
@@ -166,8 +168,13 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           const existingIds = new Set(prevTrades.map(trade => trade.id));
           const newTrades = derivTrades.filter((trade: Trade) => !existingIds.has(trade.id));
           
+          // Remove existing Deriv trades for this account to avoid duplicates
+          const filteredTrades = prevTrades.filter(trade => 
+            !trade.id.startsWith('deriv_') || trade.account_loginid !== user?.loginid
+          );
+          
           // Combine and sort by entry time (newest first)
-          const allTrades = [...prevTrades, ...newTrades].sort((a, b) => b.entryTime - a.entryTime);
+          const allTrades = [...filteredTrades, ...newTrades].sort((a, b) => b.entryTime - a.entryTime);
           
           return allTrades;
         });
@@ -212,6 +219,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
           return {
             id: `deriv_open_${contract.contract_id}`,
             symbol: contract.underlying || contract.symbol || 'R_10',
+            account_loginid: user?.loginid, // Store which account this trade belongs to
             type: contractType,
             stake: parseFloat(contract.buy_price || '0'),
             payout: parseFloat(contract.payout || '0'),
@@ -231,8 +239,10 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
 
         // Update trades with open positions from Deriv
         setTrades(prevTrades => {
-          // Remove existing Deriv open trades
-          const filteredTrades = prevTrades.filter(trade => !trade.id.startsWith('deriv_open_'));
+          // Remove existing Deriv open trades for this account
+          const filteredTrades = prevTrades.filter(trade => 
+            !trade.id.startsWith('deriv_open_') || trade.account_loginid !== user?.loginid
+          );
           
           // Add new open trades and sort by entry time (newest first)
           const allTrades = [...openTrades, ...filteredTrades].sort((a, b) => b.entryTime - a.entryTime);
@@ -296,7 +306,8 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const addTrade = (trade: Omit<Trade, 'id'>) => {
     const newTrade: Trade = {
       ...trade,
-      id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      account_loginid: user?.loginid // Associate with current account
     };
     setTrades(prev => [newTrade, ...prev]);
     
@@ -403,8 +414,17 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const completedTrades = trades.filter(trade => trade.status !== 'open');
-    const activeTrades = trades.filter(trade => trade.status === 'open').length;
+    // Filter trades by current active account
+    const currentAccountTrades = trades.filter(trade => {
+      // If no account_loginid stored (legacy trades), show all
+      if (!trade.account_loginid) return true;
+      
+      // Only show trades from current account
+      return trade.account_loginid === user?.loginid;
+    });
+
+    const completedTrades = currentAccountTrades.filter(trade => trade.status !== 'open');
+    const activeTrades = currentAccountTrades.filter(trade => trade.status === 'open').length;
     const winningTrades = completedTrades.filter(trade => trade.profit > 0).length;
     const totalTrades = completedTrades.length;
     const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
@@ -438,7 +458,11 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
   const stats = calculateStats();
 
   const value = {
-    trades,
+    trades: trades.filter(trade => {
+      // Filter trades by current account for components
+      if (!trade.account_loginid) return true; // Show legacy trades
+      return trade.account_loginid === user?.loginid;
+    }),
     stats,
     addTrade,
     updateTrade,

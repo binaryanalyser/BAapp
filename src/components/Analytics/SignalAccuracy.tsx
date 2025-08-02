@@ -8,6 +8,7 @@ const SignalAccuracy: React.FC = () => {
 
   // Calculate signal accuracy from actual trades
   const calculateAccuracy = () => {
+    // Trades are already filtered by account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     if (completedTrades.length === 0) {
       return {
@@ -35,6 +36,7 @@ const SignalAccuracy: React.FC = () => {
 
   // Calculate signal data by type
   const calculateSignalData = () => {
+    // Trades are already filtered by account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     const signalTypes = ['CALL', 'PUT', 'DIGITMATCH', 'DIGITDIFF'];
     
@@ -63,6 +65,7 @@ const SignalAccuracy: React.FC = () => {
 
   // Generate performance history from recent trades
   const generatePerformanceHistory = () => {
+    // Trades are already filtered by account in TradingContext
     const completedTrades = trades
       .filter(trade => trade.status !== 'open' && trade.exitTime)
       .sort((a, b) => a.exitTime! - b.exitTime!)

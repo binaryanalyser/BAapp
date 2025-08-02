@@ -98,6 +98,7 @@ const TradingView: React.FC = () => {
   };
 
   // Filter trades based on active tab
+  // Trades are already filtered by account in TradingContext
   const openTrades = trades.filter(trade => trade.status === 'open');
   const closedTrades = trades.filter(trade => trade.status !== 'open');
   const displayTrades = activeTab === 'open' ? openTrades : closedTrades;

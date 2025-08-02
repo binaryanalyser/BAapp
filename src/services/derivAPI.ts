@@ -413,11 +413,6 @@ class DerivAPI {
     return this.sendRequest({ portfolio: 1 });
   }
 
-  // Generic method to send any request
-  async sendRequest(request: any, timeout: number = 30000): Promise<any> {
-    return this.sendRequest(request, timeout);
-  }
-
   disconnect(): void {
     // Clear all pending callbacks
     this.requestCallbacks.forEach(callback => {

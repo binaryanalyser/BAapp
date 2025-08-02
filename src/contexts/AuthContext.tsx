@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { derivAPI } from '../services/derivAPI';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { derivAPI, AuthResponse } from '../services/derivAPI';
 
 interface User {
   loginid: string;
@@ -11,71 +11,68 @@ interface User {
   country: string;
 }
 
-interface AccountListItem {
-  loginid: string;
-  currency: string;
-  is_virtual: number;
-  email: string;
-  account_type: string;
-  broker: string;
-  is_disabled: number;
-  landing_company_name: string;
-  balance?: number;
-}
-
-interface AuthResponse {
-  authorize: {
-    loginid: string;
-    email: string;
-    fullname: string;
-    currency: string;
-    balance: number;
-    is_virtual: number;
-    country: string;
-    account_list?: any[];
-  };
-}
-
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  loginMethod: 'oauth' | 'token' | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  accountList: AccountListItem[] | null;
-  accountBalances: Record<string, number>;
   login: (token: string) => Promise<void>;
   logout: () => void;
-  handleTokenLogin: (authToken: string, method?: 'oauth' | 'token') => Promise<void>;
-  switchAccount: (loginid: string) => Promise<void>;
+  updateBalance: (balance: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [loginMethod, setLoginMethod] = useState<'oauth' | 'token' | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [accountList, setAccountList] = useState<AccountListItem[] | null>(null);
-  const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  const switchAccount = useCallback(async (loginid: string) => {
-    if (!token || !accountList) {
-      throw new Error('No token or account list available');
+  // Initialize WebSocket connection
+  useEffect(() => {
+    derivAPI.connect().catch(console.error);
+  }, []);
+
+  // Check for saved token on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem('deriv_token');
+    if (savedToken) {
+      handleTokenLogin(savedToken).catch(error => {
+        console.error('Failed to restore session:', error);
+        // Don't clear token immediately, let user try manual login
+        setIsLoading(false);
+      });
+    } else {
+      setIsLoading(false);
     }
+  }, []);
 
-    const targetAccount = accountList.find(acc => acc.loginid === loginid);
-    if (!targetAccount) {
-      throw new Error('Account not found');
-    }
-
+  const handleTokenLogin = async (authToken: string) => {
     try {
       setIsLoading(true);
       
-      // Switch to the target account
-      const response = await derivAPI.switchAccount(loginid);
+      // Ensure connection is established
+      if (!derivAPI.getConnectionStatus()) {
+        await derivAPI.connect();
+        // Add a small delay to ensure connection is stable
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      // Authorize with the token
+      const response: AuthResponse = await derivAPI.authorize(authToken);
       
       if (response.authorize) {
         const userData: User = {
@@ -89,105 +86,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         setUser(userData);
+        setToken(authToken);
+        setIsAuthenticated(true);
         
-        // Update the balance for this account
-        setAccountBalances(prev => ({
-          ...prev,
-          [loginid]: response.authorize.balance
-        }));
+        // Save token to localStorage
+        localStorage.setItem('deriv_token', authToken);
+        console.log('Authentication successful for:', userData.loginid);
       }
-    } catch (error) {
-      console.error('Failed to switch account:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [token, accountList]);
-
-  const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
-    try {
-      setIsLoading(true);
-      if (!derivAPI.getConnectionStatus()) {
-        await derivAPI.connect();
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-
-      const response: AuthResponse = await derivAPI.authorize(authToken);
-
-      if (!response.authorize) throw new Error('Authorization failed');
-
-      const userData: User = {
-        loginid: response.authorize.loginid,
-        email: response.authorize.email,
-        fullname: response.authorize.fullname,
-        currency: response.authorize.currency,
-        balance: response.authorize.balance,
-        is_virtual: response.authorize.is_virtual,
-        country: response.authorize.country
-      };
-
-      setUser(userData);
-      setToken(authToken);
-      setLoginMethod(method);
-      setIsAuthenticated(true);
-      localStorage.setItem('deriv_token', authToken);
-      localStorage.setItem('deriv_login_method', method);
-
-      if (response.authorize.account_list && method === 'oauth') {
-        const accounts: AccountListItem[] = response.authorize.account_list.map((account: any) => ({
-          loginid: account.loginid,
-          currency: account.currency,
-          is_virtual: account.is_virtual,
-          email: account.email,
-          account_type: account.account_type,
-          broker: account.broker,
-          is_disabled: account.is_disabled,
-          landing_company_name: account.landing_company_name
-        }));
-
-        const balances: Record<string, number> = {};
-
-        for (const account of accounts) {
-          try {
-            const balanceResponse = await derivAPI.sendRequest({
-              authorize: authToken,
-              loginid: account.loginid
-            });
-
-            if (balanceResponse.authorize) {
-              account.balance = balanceResponse.authorize.balance || 0;
-              balances[account.loginid] = account.balance;
-            } else {
-              // Fallback: try to get balance directly
-              const directBalance = await derivAPI.getAccountBalance(account.loginid);
-              if (directBalance.balance) {
-                account.balance = directBalance.balance.balance || 0;
-                balances[account.loginid] = account.balance;
-              }
-            }
-          } catch (err) {
-            console.warn(`Failed to fetch balance for ${account.loginid}`, err);
-            account.balance = 0;
-            balances[account.loginid] = 0;
-          }
-        }
-
-        setAccountList(accounts);
-        setAccountBalances(balances);
-      } else if (method === 'token') {
-        setAccountList(null);
-        setAccountBalances({});
-      }
-
     } catch (error) {
       console.error('Authorization failed:', error);
+      // Only clear token if it's definitely invalid (not connection issues)
       if (error instanceof Error && error.message.includes('InvalidToken')) {
         localStorage.removeItem('deriv_token');
-        localStorage.removeItem('deriv_login_method');
         setUser(null);
         setToken(null);
-        setLoginMethod(null);
         setIsAuthenticated(false);
+      } else {
+        // For connection issues, keep the token but set loading to false
+        console.warn('Connection issue during auth, keeping token for retry');
       }
       throw error;
     } finally {
@@ -195,51 +111,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const login = useCallback(async (authToken: string) => {
-    return handleTokenLogin(authToken, 'token');
-  }, []);
+  const login = async (authToken: string) => {
+    await handleTokenLogin(authToken);
+  };
 
-  const logout = useCallback(() => {
+  const logout = () => {
     setUser(null);
     setToken(null);
-    setLoginMethod(null);
     setIsAuthenticated(false);
-    setAccountList(null);
-    setAccountBalances({});
     localStorage.removeItem('deriv_token');
-    localStorage.removeItem('deriv_login_method');
-    derivAPI.disconnect();
-  }, []);
+    // Don't disconnect API as it might be used by other parts of the app
+    console.log('User logged out');
+  };
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem('deriv_token');
-    const storedMethod = localStorage.getItem('deriv_login_method') as 'oauth' | 'token' | null;
-    
-    if (storedToken && storedMethod) {
-      const performAutoLogin = async () => {
-        try {
-          await handleTokenLogin(storedToken, storedMethod);
-        } catch (error) {
-        console.error('Auto-login failed:', error);
-        logout();
-        }
-      };
-      performAutoLogin();
+  const updateBalance = (balance: number) => {
+    if (user) {
+      setUser({ ...user, balance });
     }
-  }, [handleTokenLogin, logout]);
+  };
 
   const value: AuthContextType = {
     user,
     token,
-    loginMethod,
     isAuthenticated,
     isLoading,
-    accountList,
-    accountBalances,
     login,
     logout,
-    handleTokenLogin,
-    switchAccount
+    updateBalance
   };
 
   return (
@@ -247,12 +145,4 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };

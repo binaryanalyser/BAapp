@@ -280,8 +280,11 @@ class DerivAPI {
     this.subscriptions.delete(symbol);
   }
 
-  async buyContract(parameters: any): Promise<ContractResponse> {
-    return this.sendRequest({ buy: 1, ...parameters });
+  async buyContract(contractId: string, price: number): Promise<ContractResponse> {
+    return this.sendRequest({ 
+      buy: contractId,
+      price: price
+    });
   }
 
   async getContractsFor(symbol: string): Promise<any> {

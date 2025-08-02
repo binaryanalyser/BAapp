@@ -166,28 +166,20 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
     const tradeDuration = parseInt(duration) * 60; // Convert minutes to seconds
     
     try {
-      // Execute trade via Deriv API webhook
-      console.log('Executing trade via webhook:', {
+      // Check if we have proposal data
+      if (!proposalData || !proposalData.id || !proposalData.ask_price) {
+        throw new Error('No valid proposal data available. Please wait for price calculation.');
+      }
+
+      // Execute trade using proposal ID and ask price
+      console.log('Executing trade via Deriv API:', {
+        proposalId: proposalData.id,
+        askPrice: proposalData.ask_price,
         symbol: selectedAsset,
-        type: contractType,
-        amount: parseFloat(amount),
-        duration: parseInt(duration),
-        user: user.loginid
+        type: contractType
       });
 
-      // Prepare contract parameters
-      const contractParams = {
-        contract_type: contractType,
-        symbol: selectedAsset,
-        duration: parseInt(duration),
-        duration_unit: 'm',
-        amount: parseFloat(amount),
-        basis: 'stake',
-        currency: user.currency || 'USD'
-      };
-
-      // Execute trade via Deriv API
-      const tradeResponse = await derivAPI.buyContract(contractParams);
+      const tradeResponse = await derivAPI.buyContract(proposalData.id, proposalData.ask_price);
       
       if (tradeResponse.buy) {
         // Trade executed successfully via webhook

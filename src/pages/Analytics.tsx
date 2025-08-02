@@ -50,9 +50,6 @@ const Analytics: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-3 mb-2">
-            <User className="h-8 w-8 text-blue-400" />
-            <div className="flex-1">
-            </div>
             <button
               onClick={handleSyncWithDeriv}
               disabled={isSyncing || tradesLoading}

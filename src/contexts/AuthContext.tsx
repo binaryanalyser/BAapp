@@ -1,148 +1,81 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { derivAPI, AuthResponse } from '../services/derivAPI';
+const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
+  try {
+    setIsLoading(true);
+    if (!derivAPI.getConnectionStatus()) {
+      await derivAPI.connect();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
 
-interface User {
-  loginid: string;
-  email: string;
-  fullname: string;
-  currency: string;
-  balance: number;
-  is_virtual: number;
-  country: string;
-}
+    const response: AuthResponse = await derivAPI.authorize(authToken);
 
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  login: (token: string) => Promise<void>;
-  logout: () => void;
-  updateBalance: (balance: number) => void;
-}
+    if (!response.authorize) throw new Error('Authorization failed');
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+    const userData: User = {
+      loginid: response.authorize.loginid,
+      email: response.authorize.email,
+      fullname: response.authorize.fullname,
+      currency: response.authorize.currency,
+      balance: response.authorize.balance,
+      is_virtual: response.authorize.is_virtual,
+      country: response.authorize.country
+    };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    setUser(userData);
+    setToken(authToken);
+    setLoginMethod(method);
+    setIsAuthenticated(true);
+    localStorage.setItem('deriv_token', authToken);
+    localStorage.setItem('deriv_login_method', method);
+
+    if (response.authorize.account_list && method === 'oauth') {
+      const accounts: AccountListItem[] = response.authorize.account_list.map((account: any) => ({
+        loginid: account.loginid,
+        currency: account.currency,
+        is_virtual: account.is_virtual,
+        email: account.email,
+        account_type: account.account_type,
+        broker: account.broker,
+        is_disabled: account.is_disabled,
+        landing_company_name: account.landing_company_name
+      }));
+
+      const accountBalances: Record<string, number> = {};
+
+      for (const account of accounts) {
+        try {
+          const res = await derivAPI.sendRequest({
+            authorize: authToken,
+            loginid: account.loginid
+          });
+
+          if (res.authorize) {
+            account.balance = res.authorize.balance || 0;
+            accountBalances[account.loginid] = account.balance;
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch balance for ${account.loginid}`, err);
+        }
+      }
+
+      setAccountList(accounts);
+      setAccountBalances(accountBalances);
+    } else if (method === 'token') {
+      setAccountList(null);
+      setAccountBalances({});
+    }
+
+  } catch (error) {
+    console.error('Authorization failed:', error);
+    if (error instanceof Error && error.message.includes('InvalidToken')) {
+      localStorage.removeItem('deriv_token');
+      localStorage.removeItem('deriv_login_method');
+      setUser(null);
+      setToken(null);
+      setLoginMethod(null);
+      setIsAuthenticated(false);
+    }
+    throw error;
+  } finally {
+    setIsLoading(false);
   }
-  return context;
-};
-
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Initialize WebSocket connection
-  useEffect(() => {
-    derivAPI.connect().catch(console.error);
-  }, []);
-
-  // Check for saved token on mount
-  useEffect(() => {
-    const savedToken = localStorage.getItem('deriv_token');
-    if (savedToken) {
-      handleTokenLogin(savedToken).catch(error => {
-        console.error('Failed to restore session:', error);
-        // Don't clear token immediately, let user try manual login
-        setIsLoading(false);
-      });
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const handleTokenLogin = async (authToken: string) => {
-    try {
-      setIsLoading(true);
-      
-      // Ensure connection is established
-      if (!derivAPI.getConnectionStatus()) {
-        await derivAPI.connect();
-        // Add a small delay to ensure connection is stable
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-      // Authorize with the token
-      const response: AuthResponse = await derivAPI.authorize(authToken);
-      
-      if (response.authorize) {
-        const userData: User = {
-          loginid: response.authorize.loginid,
-          email: response.authorize.email,
-          fullname: response.authorize.fullname,
-          currency: response.authorize.currency,
-          balance: response.authorize.balance,
-          is_virtual: response.authorize.is_virtual,
-          country: response.authorize.country
-        };
-
-        setUser(userData);
-        setToken(authToken);
-        setIsAuthenticated(true);
-        
-        // Save token to localStorage
-        localStorage.setItem('deriv_token', authToken);
-        console.log('Authentication successful for:', userData.loginid);
-      }
-    } catch (error) {
-      console.error('Authorization failed:', error);
-      // Only clear token if it's definitely invalid (not connection issues)
-      if (error instanceof Error && error.message.includes('InvalidToken')) {
-        localStorage.removeItem('deriv_token');
-        setUser(null);
-        setToken(null);
-        setIsAuthenticated(false);
-      } else {
-        // For connection issues, keep the token but set loading to false
-        console.warn('Connection issue during auth, keeping token for retry');
-      }
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const login = async (authToken: string) => {
-    await handleTokenLogin(authToken);
-  };
-
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem('deriv_token');
-    // Don't disconnect API as it might be used by other parts of the app
-    console.log('User logged out');
-  };
-
-  const updateBalance = (balance: number) => {
-    if (user) {
-      setUser({ ...user, balance });
-    }
-  };
-
-  const value: AuthContextType = {
-    user,
-    token,
-    isAuthenticated,
-    isLoading,
-    login,
-    logout,
-    updateBalance
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
 };

@@ -122,8 +122,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!derivAPI.getConnectionStatus()) {
         console.log('WebSocket not connected, establishing connection...');
         await derivAPI.connect();
-        // Add a small delay to ensure connection is stable
-        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // Authorize with the token

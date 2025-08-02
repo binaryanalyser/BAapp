@@ -32,8 +32,6 @@ const AssetSelector: React.FC<AssetSelectorProps> = ({ selectedAsset, onAssetCha
     { symbol: 'R_100', display_name: 'Volatility 100 Index', market: 'synthetic_index', submarket: 'random_index', is_trading_suspended: false, pip: 0.01 },
     
     // Step Indices
-    { symbol: 'STEPINDEX', display_name: 'Step Index', market: 'synthetic_index', submarket: 'step_index', is_trading_suspended: false, pip: 0.01 },
-    
     // Crash/Boom Indices
     { symbol: 'BOOM1000', display_name: 'Boom 1000 Index', market: 'synthetic_index', submarket: 'crash_boom', is_trading_suspended: false, pip: 0.01 },
     { symbol: 'CRASH1000', display_name: 'Crash 1000 Index', market: 'synthetic_index', submarket: 'crash_boom', is_trading_suspended: false, pip: 0.01 },

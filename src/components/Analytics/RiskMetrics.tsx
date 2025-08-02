@@ -1,40 +1,195 @@
 import React from 'react';
 import { Shield, AlertTriangle, TrendingDown } from 'lucide-react';
+import { useTradingContext } from '../../contexts/TradingContext';
 
 const RiskMetrics: React.FC = () => {
+  const { trades, stats } = useTradingContext();
+
+  // Calculate risk metrics from actual trades
+  const calculateRiskMetrics = () => {
+    const completedTrades = trades.filter(trade => trade.status !== 'open');
+    
+    if (completedTrades.length === 0) {
+      return {
+        maxDrawdown: 0,
+        riskReward: 0,
+        riskScore: 5,
+        avgStake: 0,
+        maxStake: 0,
+        consecutiveLosses: 0
+      };
+    }
+
+    // Calculate max drawdown
+    let runningProfit = 0;
+    let peak = 0;
+    let maxDrawdown = 0;
+    
+    completedTrades
+      .sort((a, b) => (a.exitTime || 0) - (b.exitTime || 0))
+      .forEach(trade => {
+        runningProfit += trade.profit;
+        peak = Math.max(peak, runningProfit);
+        const drawdown = peak - runningProfit;
+        maxDrawdown = Math.max(maxDrawdown, drawdown);
+      });
+
+    // Calculate risk/reward ratio
+    const winningTrades = completedTrades.filter(trade => trade.status === 'won');
+    const losingTrades = completedTrades.filter(trade => trade.status === 'lost');
+    
+    const avgWin = winningTrades.length > 0 ? 
+      winningTrades.reduce((sum, trade) => sum + trade.profit, 0) / winningTrades.length : 0;
+    const avgLoss = losingTrades.length > 0 ? 
+      Math.abs(losingTrades.reduce((sum, trade) => sum + trade.profit, 0)) / losingTrades.length : 0;
+    
+    const riskReward = avgLoss > 0 ? avgWin / avgLoss : 0;
+
+    // Calculate other metrics
+    const avgStake = completedTrades.reduce((sum, trade) => sum + trade.stake, 0) / completedTrades.length;
+    const maxStake = Math.max(...completedTrades.map(trade => trade.stake));
+    
+    // Calculate consecutive losses
+    let consecutiveLosses = 0;
+    let currentStreak = 0;
+    completedTrades
+      .sort((a, b) => (b.exitTime || 0) - (a.exitTime || 0))
+      .forEach(trade => {
+        if (trade.status === 'lost') {
+          currentStreak++;
+          consecutiveLosses = Math.max(consecutiveLosses, currentStreak);
+        } else {
+          currentStreak = 0;
+        }
+      });
+
+    // Calculate risk score (1-10, lower is better)
+    let riskScore = 5; // Base score
+    
+    // Adjust based on win rate
+    if (stats.winRate > 70) riskScore -= 2;
+    else if (stats.winRate < 50) riskScore += 2;
+    
+    // Adjust based on drawdown
+    if (maxDrawdown > avgStake * 10) riskScore += 2;
+    else if (maxDrawdown < avgStake * 3) riskScore -= 1;
+    
+    // Adjust based on consecutive losses
+    if (consecutiveLosses > 5) riskScore += 1;
+    
+    riskScore = Math.max(1, Math.min(10, riskScore));
+
+    return {
+      maxDrawdown,
+      riskReward,
+      riskScore,
+      avgStake,
+      maxStake,
+      consecutiveLosses
+    };
+  };
+
+  const riskData = calculateRiskMetrics();
+  
+  const getRiskScoreLabel = (score: number) => {
+    if (score <= 3) return 'Low';
+    if (score <= 6) return 'Medium';
+    return 'High';
+  };
+
+  const getRiskScoreColor = (score: number) => {
+    if (score <= 3) return { color: 'text-green-400', bgColor: 'bg-green-500/10' };
+    if (score <= 6) return { color: 'text-yellow-400', bgColor: 'bg-yellow-500/10' };
+    return { color: 'text-red-400', bgColor: 'bg-red-500/10' };
+  };
+
+  const riskScoreStyle = getRiskScoreColor(riskData.riskScore);
+
   const metrics = [
     {
       label: 'Risk Score',
-      value: 'Medium',
-      detail: '6.2/10',
+      value: getRiskScoreLabel(riskData.riskScore),
+      detail: `${riskData.riskScore.toFixed(1)}/10`,
       icon: Shield,
-      color: 'text-yellow-400',
-      bgColor: 'bg-yellow-500/10'
+      color: riskScoreStyle.color,
+      bgColor: riskScoreStyle.bgColor
     },
     {
       label: 'Max Drawdown',
-      value: '-$127.45',
-      detail: '5.2% of balance',
+      value: `-$${riskData.maxDrawdown.toFixed(2)}`,
+      detail: riskData.avgStake > 0 ? `${((riskData.maxDrawdown / riskData.avgStake) * 100).toFixed(1)}% of avg stake` : 'No data',
       icon: TrendingDown,
       color: 'text-red-400',
       bgColor: 'bg-red-500/10'
     },
     {
       label: 'Risk/Reward',
-      value: '1:1.85',
+      value: riskData.riskReward > 0 ? `1:${riskData.riskReward.toFixed(2)}` : 'N/A',
       detail: 'Avg. ratio',
       icon: AlertTriangle,
-      color: 'text-green-400',
-      bgColor: 'bg-green-500/10'
+      color: riskData.riskReward >= 1.5 ? 'text-green-400' : riskData.riskReward >= 1 ? 'text-yellow-400' : 'text-red-400',
+      bgColor: riskData.riskReward >= 1.5 ? 'bg-green-500/10' : riskData.riskReward >= 1 ? 'bg-yellow-500/10' : 'bg-red-500/10'
     }
   ];
 
-  const riskFactors = [
-    { factor: 'Position Sizing', score: 8, status: 'Good' },
-    { factor: 'Diversification', score: 6, status: 'Fair' },
-    { factor: 'Stop Loss Usage', score: 4, status: 'Poor' },
-    { factor: 'Risk Per Trade', score: 7, status: 'Good' }
-  ];
+  // Calculate risk factors based on actual trading behavior
+  const calculateRiskFactors = () => {
+    const completedTrades = trades.filter(trade => trade.status !== 'open');
+    
+    if (completedTrades.length === 0) {
+      return [
+        { factor: 'Position Sizing', score: 5, status: 'No Data' },
+        { factor: 'Diversification', score: 5, status: 'No Data' },
+        { factor: 'Win Rate', score: 5, status: 'No Data' },
+        { factor: 'Risk Management', score: 5, status: 'No Data' }
+      ];
+    }
+
+    // Position Sizing (consistency of stake amounts)
+    const stakes = completedTrades.map(trade => trade.stake);
+    const avgStake = stakes.reduce((a, b) => a + b, 0) / stakes.length;
+    const stakeVariance = stakes.reduce((sum, stake) => sum + Math.pow(stake - avgStake, 2), 0) / stakes.length;
+    const stakeCV = Math.sqrt(stakeVariance) / avgStake; // Coefficient of variation
+    const positionSizingScore = Math.max(1, Math.min(10, 10 - (stakeCV * 20))); // Lower variance = higher score
+
+    // Diversification (number of different symbols traded)
+    const uniqueSymbols = new Set(completedTrades.map(trade => trade.symbol)).size;
+    const diversificationScore = Math.min(10, uniqueSymbols * 2); // More symbols = higher score
+
+    // Win Rate Score
+    const winRateScore = Math.min(10, stats.winRate / 10);
+
+    // Risk Management (based on consecutive losses and drawdown)
+    let riskManagementScore = 8;
+    if (riskData.consecutiveLosses > 5) riskManagementScore -= 3;
+    if (riskData.maxDrawdown > riskData.avgStake * 10) riskManagementScore -= 2;
+    riskManagementScore = Math.max(1, riskManagementScore);
+
+    return [
+      { 
+        factor: 'Position Sizing', 
+        score: Math.round(positionSizingScore), 
+        status: positionSizingScore >= 8 ? 'Good' : positionSizingScore >= 6 ? 'Fair' : 'Poor' 
+      },
+      { 
+        factor: 'Diversification', 
+        score: Math.round(diversificationScore), 
+        status: diversificationScore >= 8 ? 'Good' : diversificationScore >= 6 ? 'Fair' : 'Poor' 
+      },
+      { 
+        factor: 'Win Rate', 
+        score: Math.round(winRateScore), 
+        status: winRateScore >= 8 ? 'Good' : winRateScore >= 6 ? 'Fair' : 'Poor' 
+      },
+      { 
+        factor: 'Risk Management', 
+        score: Math.round(riskManagementScore), 
+        status: riskManagementScore >= 8 ? 'Good' : riskManagementScore >= 6 ? 'Fair' : 'Poor' 
+      }
+    ];
+  };
+
+  const riskFactors = calculateRiskFactors();
 
   const getScoreColor = (score: number) => {
     if (score >= 8) return 'text-green-400';
@@ -100,6 +255,25 @@ const RiskMetrics: React.FC = () => {
             </div>
           ))}
         </div>
+        
+        {/* Additional Risk Insights */}
+        {trades.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-gray-600">
+            <h5 className="text-md font-medium text-white mb-3">Risk Insights</h5>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="bg-gray-750 rounded p-3">
+                <div className="text-gray-400">Max Consecutive Losses</div>
+                <div className={`font-bold ${riskData.consecutiveLosses > 5 ? 'text-red-400' : 'text-green-400'}`}>
+                  {riskData.consecutiveLosses}
+                </div>
+              </div>
+              <div className="bg-gray-750 rounded p-3">
+                <div className="text-gray-400">Largest Single Stake</div>
+                <div className="font-bold text-white">${riskData.maxStake.toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -10,7 +10,7 @@ import QuickTrade from '../components/Trading/QuickTrade';
 import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause, RefreshCw, Download, X } from 'lucide-react';
 
 const TradingView: React.FC = () => {
-  const { isAuthenticated, user, isLoading } = useAuth();
+  const { isAuthenticated, user, isLoading, accountList, switchAccount } = useAuth();
   const { isConnected, subscribeTo } = useWebSocket();
   const { stats: tradingStats, trades, loadTradingHistory, syncWithDeriv, sellTrade, isLoading: tradesLoading } = useTradingContext();
   const [selectedAsset, setSelectedAsset] = useState('R_10');
@@ -19,6 +19,7 @@ const TradingView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
   const [isSyncing, setIsSyncing] = useState(false);
   const [sellLoading, setSellLoading] = useState<Record<string, boolean>>({});
+  const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
 
   // All useEffect hooks must be called before any conditional returns
   useEffect(() => {
@@ -96,6 +97,25 @@ const TradingView: React.FC = () => {
       alert('Failed to sell trade: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setSellLoading(prev => ({ ...prev, [contractId]: false }));
+    }
+  };
+
+  const handleAccountSwitch = async (loginid: string) => {
+    if (loginid === user?.loginid || isSwitchingAccount) return;
+    
+    setIsSwitchingAccount(true);
+    try {
+      await switchAccount(loginid);
+      // Refresh trading data after account switch
+      await Promise.all([
+        loadTradingHistory(),
+        loadOpenTrades()
+      ]);
+    } catch (error) {
+      console.error('Failed to switch account:', error);
+      alert('Failed to switch account: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsSwitchingAccount(false);
     }
   };
 
@@ -181,6 +201,50 @@ const TradingView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Account Selector - Show if multiple accounts available */}
+        {accountList && accountList.length > 1 && (
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8">
+            <h3 className="text-lg font-semibold text-white mb-4">Select Trading Account</h3>
+            <div className="relative">
+              <select
+                value={user?.loginid || ''}
+                onChange={(e) => handleAccountSwitch(e.target.value)}
+                disabled={isSwitchingAccount || authLoading}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {accountList.map((account) => {
+                  const isDemo = account.is_virtual === 1;
+                  const prefix = isDemo ? 'VRT' : 'CR';
+                  const displayText = `${prefix}${account.loginid} - ${account.currency}`;
+                  
+                  return (
+                    <option 
+                      key={account.loginid} 
+                      value={account.loginid}
+                      className="bg-gray-700 text-white"
+                    >
+                      {displayText}
+                    </option>
+                  );
+                })}
+              </select>
+              
+              {isSwitchingAccount && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <div className="flex items-center justify-between text-sm text-gray-400">
+                <span>Active: {user?.loginid} ({user?.is_virtual ? 'Demo' : 'Real'}) - {user?.currency}</span>
+                <span>{accountList.length} accounts available</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Metrics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

@@ -62,7 +62,7 @@ const Login: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center">
-            <img src="/welcom_logo.png" alt="Binary Analyzer" className="h-12 w-full" />
+            <img src="/welcom_logo.png" alt="Binary Analyzer" className="h-[45px] w-[45px]" />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-white">
             Welcome to Binary Analyzer

@@ -184,6 +184,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             };
             
             setUser(userData);
+            
+            // Update the account list with fresh balance data
+            if (authResponse.authorize.account_list) {
+              const updatedAccounts: AccountListItem[] = authResponse.authorize.account_list.map((account: any) => ({
+                loginid: account.loginid,
+                currency: account.currency,
+                is_virtual: account.is_virtual,
+                balance: account.balance,
+                email: account.email,
+                account_type: account.account_type,
+                broker: account.broker,
+                is_disabled: account.is_disabled,
+                landing_company_name: account.landing_company_name
+              }));
+              setAccountList(updatedAccounts);
+            }
+            
             console.log('Successfully switched to account:', loginid);
             return; // Success, exit early
           }
@@ -211,6 +228,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           };
           
           setUser(userData);
+          
+          // Update the account list with fresh balance data
+          if (response.authorize.account_list) {
+            const updatedAccounts: AccountListItem[] = response.authorize.account_list.map((account: any) => ({
+              loginid: account.loginid,
+              currency: account.currency,
+              is_virtual: account.is_virtual,
+              balance: account.balance,
+              email: account.email,
+              account_type: account.account_type,
+              broker: account.broker,
+              is_disabled: account.is_disabled,
+              landing_company_name: account.landing_company_name
+            }));
+            setAccountList(updatedAccounts);
+          }
+          
           console.log('Successfully switched to account via authorize:', loginid);
           return; // Success, exit early
         }
@@ -240,6 +274,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const balanceResponse = await derivAPI.getBalance();
             if (balanceResponse.balance) {
               updateBalance(balanceResponse.balance.balance);
+              
+              // Update the account list with the fresh balance
+              setAccountList(prevList => 
+                prevList ? prevList.map(acc => 
+                  acc.loginid === loginid 
+                    ? { ...acc, balance: balanceResponse.balance.balance }
+                    : acc
+                ) : prevList
+              );
             }
           } catch (balanceError) {
             console.warn('Failed to get balance after local switch:', balanceError);
@@ -264,6 +307,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const balanceResponse = await derivAPI.getBalance();
       if (balanceResponse.balance) {
         updateBalance(balanceResponse.balance.balance);
+        
+        // Update the account list with the fresh balance
+        if (user) {
+          setAccountList(prevList => 
+            prevList ? prevList.map(acc => 
+              acc.loginid === user.loginid 
+                ? { ...acc, balance: balanceResponse.balance.balance }
+                : acc
+            ) : prevList
+          );
+        }
       }
     } catch (balanceError) {
       console.warn('Failed to get balance after account switch:', balanceError);
@@ -283,6 +337,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const updateBalance = (balance: number) => {
     if (user) {
       setUser({ ...user, balance });
+      
+      // Also update the balance in the account list
+      setAccountList(prevList => 
+        prevList ? prevList.map(acc => 
+          acc.loginid === user.loginid 
+            ? { ...acc, balance }
+            : acc
+        ) : prevList
+      );
     }
   };
 

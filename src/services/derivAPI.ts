@@ -382,22 +382,6 @@ class DerivAPI {
     return this.sendRequest({ portfolio: 1 });
   }
 
-  async sendRequest(request: any, timeout: number = 30000): Promise<any> {
-    return this.sendRequest(request, timeout);
-  }
-
-  async getProposalOpenContract(contractId: number): Promise<any> {
-    return this.sendRequest({ 
-      proposal_open_contract: 1,
-      contract_id: contractId,
-      subscribe: 1
-    });
-  }
-
-  async sellContract(contractId: number): Promise<any> {
-    return this.sendRequest({ sell: contractId });
-  }
-
   disconnect(): void {
     // Clear all pending callbacks
     this.requestCallbacks.forEach(callback => {

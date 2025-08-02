@@ -2,13 +2,15 @@ import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { Brain, TrendingUp, Activity } from 'lucide-react';
 import { useTradingContext } from '../../contexts/TradingContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const SignalAccuracy: React.FC = () => {
   const { trades, stats } = useTradingContext();
+  const { user } = useAuth();
 
   // Calculate signal accuracy from actual trades
   const calculateAccuracy = () => {
-    // Trades are already filtered by account in TradingContext
+    // Trades are already filtered by current account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     if (completedTrades.length === 0) {
       return {
@@ -36,7 +38,7 @@ const SignalAccuracy: React.FC = () => {
 
   // Calculate signal data by type
   const calculateSignalData = () => {
-    // Trades are already filtered by account in TradingContext
+    // Trades are already filtered by current account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     const signalTypes = ['CALL', 'PUT', 'DIGITMATCH', 'DIGITDIFF'];
     
@@ -65,7 +67,7 @@ const SignalAccuracy: React.FC = () => {
 
   // Generate performance history from recent trades
   const generatePerformanceHistory = () => {
-    // Trades are already filtered by account in TradingContext
+    // Trades are already filtered by current account in TradingContext
     const completedTrades = trades
       .filter(trade => trade.status !== 'open' && trade.exitTime)
       .sort((a, b) => a.exitTime! - b.exitTime!)
@@ -100,6 +102,11 @@ const SignalAccuracy: React.FC = () => {
       <div className="flex items-center space-x-3 mb-6">
         <Brain className="h-6 w-6 text-blue-400" />
         <h3 className="text-xl font-semibold text-white">AI Signal Performance</h3>
+        {user && (
+          <div className="text-sm text-gray-400">
+            ({user.loginid} - {user.is_virtual ? 'Demo' : 'Real'})
+          </div>
+        )}
         <div className="flex items-center space-x-1">
           <Activity className="h-4 w-4 text-green-400 animate-pulse" />
           <span className="text-xs text-green-400">Live Tracking</span>

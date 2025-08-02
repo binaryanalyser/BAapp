@@ -1,13 +1,15 @@
 import React from 'react';
 import { Shield, AlertTriangle, TrendingDown } from 'lucide-react';
 import { useTradingContext } from '../../contexts/TradingContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const RiskMetrics: React.FC = () => {
   const { trades, stats } = useTradingContext();
+  const { user } = useAuth();
 
   // Calculate risk metrics from actual trades
   const calculateRiskMetrics = () => {
-    // Trades are already filtered by account in TradingContext
+    // Trades are already filtered by current account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     
     if (completedTrades.length === 0) {
@@ -135,7 +137,7 @@ const RiskMetrics: React.FC = () => {
 
   // Calculate risk factors based on actual trading behavior
   const calculateRiskFactors = () => {
-    // Trades are already filtered by account in TradingContext
+    // Trades are already filtered by current account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     
     if (completedTrades.length === 0) {
@@ -206,6 +208,11 @@ const RiskMetrics: React.FC = () => {
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
       <h3 className="text-xl font-semibold text-white mb-6">Risk Management</h3>
+      {user && (
+        <div className="mb-4 text-sm text-gray-400">
+          Account: {user.loginid} ({user.is_virtual ? 'Demo' : 'Real'}) - {trades.length} trades analyzed
+        </div>
+      )}
       
       {/* Risk Metrics Cards */}
       <div className="grid grid-cols-1 gap-4 mb-6">

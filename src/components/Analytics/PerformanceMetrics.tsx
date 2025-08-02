@@ -1,12 +1,14 @@
 import React from 'react';
 import { TrendingUp, Target, DollarSign, Activity } from 'lucide-react';
 import { useTradingContext } from '../../contexts/TradingContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const PerformanceMetrics: React.FC = () => {
   const { trades, stats } = useTradingContext();
+  const { user } = useAuth();
 
   // Calculate additional metrics
-  // Trades are already filtered by account in TradingContext
+  // Trades are already filtered by current account in TradingContext
   const completedTrades = trades.filter(trade => trade.status !== 'open');
   const avgProfit = completedTrades.length > 0 ? 
     completedTrades.reduce((sum, trade) => sum + trade.profit, 0) / completedTrades.length : 0;
@@ -53,7 +55,7 @@ const PerformanceMetrics: React.FC = () => {
 
   // Calculate weekly trades
   const weekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-  // Trades are already filtered by account in TradingContext
+  // Get weekly trades for current account
   const weeklyTrades = trades.filter(trade => 
     trade.entryTime >= weekAgo
   ).length;
@@ -111,6 +113,11 @@ const PerformanceMetrics: React.FC = () => {
 
       <div className="mt-6 pt-6 border-t border-gray-700">
         <h4 className="text-lg font-medium text-white mb-4">Recent Performance</h4>
+        {user && (
+          <div className="mb-3 text-sm text-gray-400">
+            Account: {user.loginid} ({user.is_virtual ? 'Demo' : 'Real'})
+          </div>
+        )}
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-gray-400">Today</span>

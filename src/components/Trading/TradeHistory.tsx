@@ -1,9 +1,11 @@
 import React from 'react';
 import { History, TrendingUp, TrendingDown, Clock } from 'lucide-react';
 import { useTradingContext } from '../../contexts/TradingContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const TradeHistory: React.FC = () => {
   const { trades } = useTradingContext();
+  const { user } = useAuth();
 
   const getStatusIcon = (status: 'won' | 'lost' | 'open') => {
     switch (status) {
@@ -38,7 +40,14 @@ const TradeHistory: React.FC = () => {
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-semibold text-white">Trade History</h3>
+        <div>
+          <h3 className="text-xl font-semibold text-white">Trade History</h3>
+          {user && (
+            <p className="text-sm text-gray-400 mt-1">
+              {user.loginid} ({user.is_virtual ? 'Demo' : 'Real'}) - {trades.length} trades
+            </p>
+          )}
+        </div>
         <History className="h-5 w-5 text-gray-400" />
       </div>
 
@@ -63,6 +72,11 @@ const TradeHistory: React.FC = () => {
                   <span className="bg-gray-700 px-2 py-1 rounded text-xs text-gray-300">
                     {trade.type}
                   </span>
+                  {trade.id.startsWith('deriv_') && (
+                    <span className="ml-1 bg-blue-600 px-2 py-1 rounded text-xs text-white">
+                      DERIV
+                    </span>
+                  )}
                 </td>
                 <td className="py-3 px-4 text-white font-mono">${trade.stake.toFixed(2)}</td>
                 <td className="py-3 px-4 text-white font-mono">${trade.payout.toFixed(2)}</td>

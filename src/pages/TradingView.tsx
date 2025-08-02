@@ -169,14 +169,23 @@ const TradingView: React.FC = () => {
         <div className="mb-8">
           <div className="flex items-center space-x-3 mb-2">
             <User className="h-8 w-8 text-blue-400" />
-            <h1 className="text-3xl font-bold text-white">
-              AI Trading Signals
-            </h1>
+            <div>
+              <h1 className="text-3xl font-bold text-white">AI Trading Signals</h1>
+              {user && (
+                <p className="text-gray-400 mt-1">
+                  Account: {user.loginid} ({user.is_virtual ? 'Demo' : 'Real'}) | 
+                  Balance: {user.balance.toFixed(2)} {user.currency}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-between">
             <p className="text-gray-400">Execute trades with AI-powered signals and real-time analysis</p>
-            <div className="text-sm text-gray-500">
-              App Trades: {trades.length} | Active: {tradingStats.activeTrades}
+            <div className="text-sm text-gray-400">
+              Total Trades: {trades.length} | Active: {tradingStats.activeTrades} | 
+              P&L: <span className={`font-bold ${tradingStats.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {tradingStats.totalProfit >= 0 ? '+' : ''}${tradingStats.totalProfit.toFixed(2)}
+              </span>
             </div>
           </div>
         </div>

@@ -1,13 +1,15 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTradingContext } from '../../contexts/TradingContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const TradingStats: React.FC = () => {
   const { trades } = useTradingContext();
+  const { user } = useAuth();
 
   // Calculate real contract data from trades
   const calculateContractData = () => {
-    // Trades are already filtered by account in TradingContext
+    // Trades are already filtered by current account in TradingContext
     const completedTrades = trades.filter(trade => trade.status !== 'open');
     const contractTypes = ['CALL', 'PUT', 'DIGITMATCH', 'DIGITDIFF'];
     
@@ -48,6 +50,11 @@ const TradingStats: React.FC = () => {
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
       <h3 className="text-xl font-semibold text-white mb-6">Trading Statistics</h3>
+      {user && (
+        <div className="mb-4 text-sm text-gray-400">
+          Account: {user.loginid} ({user.is_virtual ? 'Demo' : 'Real'}) - {trades.length} total trades
+        </div>
+      )}
       
       <div className="h-64 mb-6">
         <ResponsiveContainer width="100%" height="100%">

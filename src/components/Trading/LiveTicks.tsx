@@ -29,7 +29,7 @@ interface DigitStats {
 
 const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
   const [selectedSymbol, setSelectedSymbol] = useState('R_10');
-  const [activeTab, setActiveTab] = useState<'volatility' | 'matches' | 'odd-even'>('volatility');
+  const [activeTab, setActiveTab] = useState<'matches' | 'odd-even' | 'over-under'>('matches');
   const [currentTick, setCurrentTick] = useState<TickData | null>(null);
   const [recentDigits, setRecentDigits] = useState<number[]>([]);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
@@ -313,45 +313,69 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
 
   // Tab configuration
   const tabs = [
-    { id: 'volatility' as const, label: 'Volatility Analysis', icon: Activity },
     { id: 'matches' as const, label: 'Matches/Differs', icon: Target },
-    { id: 'odd-even' as const, label: 'Odd/Even Analysis', icon: TrendingUp }
+    { id: 'odd-even' as const, label: 'Odd/Even Analysis', icon: TrendingUp },
+    { id: 'over-under' as const, label: 'Over/Under', icon: Activity }
   ];
 
   // Render tab content
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'volatility':
-        return renderVolatilityTab();
       case 'matches':
         return renderMatchesTab();
       case 'odd-even':
         return renderOddEvenTab();
+      case 'over-under':
+        return renderOverUnderTab();
       default:
-        return renderVolatilityTab();
+        return renderMatchesTab();
     }
   };
 
-  const renderVolatilityTab = () => (
+  const renderOverUnderTab = () => {
+    // Calculate over/under statistics (using 5 as the threshold)
+    const calculateOverUnderStats = () => {
+      if (digitHistory.length === 0) return { over: 0, under: 0, equal: 0, total: 0, overPercentage: 0, underPercentage: 0, equalPercentage: 0 };
+      
+      const over = digitHistory.filter(d => d > 5).length;
+      const under = digitHistory.filter(d => d < 5).length;
+      const equal = digitHistory.filter(d => d === 5).length;
+      const total = digitHistory.length;
+      const overPercentage = (over / total) * 100;
+      const underPercentage = (under / total) * 100;
+      const equalPercentage = (equal / total) * 100;
+      
+      return { over, under, equal, total, overPercentage, underPercentage, equalPercentage };
+    };
+
+    const overUnderStats = calculateOverUnderStats();
+
+    return (
     <>
       {/* Last Digits Display */}
       <div className="mb-6">
         <h4 className="text-lg font-medium text-white mb-3">Last 20 Digits</h4>
         <div className="flex flex-wrap gap-2 justify-center">
           {recentDigits.map((digit, index) => {
-            const isEven = digit % 2 === 0;
+            const isOver = digit > 5;
+            const isUnder = digit < 5;
+            const isEqual = digit === 5;
             const isRecent = index >= recentDigits.length - 5;
             return (
               <div
                 key={index}
                 className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all duration-300 ${
                   isRecent
-                    ? isEven
-                      ? 'bg-blue-500 text-white shadow-lg scale-110'
-                      : 'bg-red-500 text-white shadow-lg scale-110'
-                    : isEven
-                    ? 'bg-blue-400 text-white'
-                    : 'bg-red-400 text-white'
+                    ? isOver
+                      ? 'bg-green-500 text-white shadow-lg scale-110'
+                      : isUnder
+                      ? 'bg-red-500 text-white shadow-lg scale-110'
+                      : 'bg-yellow-500 text-white shadow-lg scale-110'
+                    : isOver
+                    ? 'bg-green-400 text-white'
+                    : isUnder
+                    ? 'bg-red-400 text-white'
+                    : 'bg-yellow-400 text-white'
                 }`}
               >
                 {digit}
@@ -366,6 +390,52 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         )}
       </div>
 
+      {/* Over/Under Analysis */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-green-600/20 rounded-lg border border-green-500 p-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-400">
+              {overUnderStats.over}
+            </div>
+            <div className="text-sm text-green-300 mb-1">Over 5</div>
+            <div className="text-xs text-gray-400">
+              {overUnderStats.overPercentage.toFixed(1)}% of {overUnderStats.total} digits
+            </div>
+            <div className="text-xs text-green-200 mt-2">
+              6, 7, 8, 9
+            </div>
+          </div>
+        </div>
+        <div className="bg-yellow-600/20 rounded-lg border border-yellow-500 p-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-yellow-400">
+              {overUnderStats.equal}
+            </div>
+            <div className="text-sm text-yellow-300 mb-1">Equal 5</div>
+            <div className="text-xs text-gray-400">
+              {overUnderStats.equalPercentage.toFixed(1)}% of {overUnderStats.total} digits
+            </div>
+            <div className="text-xs text-yellow-200 mt-2">
+              5
+            </div>
+          </div>
+        </div>
+        <div className="bg-red-600/20 rounded-lg border border-red-500 p-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-red-400">
+              {overUnderStats.under}
+            </div>
+            <div className="text-sm text-red-300 mb-1">Under 5</div>
+            <div className="text-xs text-gray-400">
+              {overUnderStats.underPercentage.toFixed(1)}% of {overUnderStats.total} digits
+            </div>
+            <div className="text-xs text-red-200 mt-2">
+              0, 1, 2, 3, 4
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Digit Analysis */}
       {digitStats.length > 0 && (
         <div className="bg-gray-750 rounded-lg p-4">
@@ -373,28 +443,6 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
             Digit Analysis ({digitHistory.length} samples)
           </h4>
           
-          {/* Top/Bottom Digits */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="text-center p-3 bg-red-600/20 rounded-lg border border-red-500">
-              <div className="text-xl font-bold text-red-400">
-                {digitStats[0]?.digit ?? 'N/A'}
-              </div>
-              <div className="text-sm text-red-300">Hottest Digit</div>
-              <div className="text-xs text-gray-400">
-                {digitStats[0]?.count ?? 0} times ({digitStats[0]?.percentage.toFixed(1) ?? 0}%)
-              </div>
-            </div>
-            <div className="text-center p-3 bg-blue-600/20 rounded-lg border border-blue-500">
-              <div className="text-xl font-bold text-blue-400">
-                {digitStats[digitStats.length - 1]?.digit ?? 'N/A'}
-              </div>
-              <div className="text-sm text-blue-300">Coldest Digit</div>
-              <div className="text-xs text-gray-400">
-                {digitStats[digitStats.length - 1]?.count ?? 0} times ({digitStats[digitStats.length - 1]?.percentage.toFixed(1) ?? 0}%)
-              </div>
-            </div>
-          </div>
-
           {/* Digit Frequency Bars */}
           <div className="space-y-2">
             {digitStats.map((stat) => (
@@ -403,9 +451,9 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                 <div className="flex-1 bg-gray-700 rounded-full h-3">
                   <div 
                     className={`h-3 rounded-full transition-all duration-500 ${
-                      stat === digitStats[0] ? 'bg-red-400' :
-                      stat === digitStats[digitStats.length - 1] ? 'bg-blue-400' : 
-                      'bg-gray-500'
+                      stat.digit > 5 ? 'bg-green-400' :
+                      stat.digit < 5 ? 'bg-red-400' : 
+                      'bg-yellow-400'
                     }`}
                     style={{ width: `${stat.percentage}%` }}
                   ></div>
@@ -415,10 +463,38 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
               </div>
             ))}
           </div>
+
+          {/* Over/Under Distribution */}
+          <div className="mt-6 pt-4 border-t border-gray-600">
+            <h5 className="text-md font-medium text-white mb-3">Over/Under Distribution</h5>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-300">Distribution:</span>
+              <div className="flex items-center space-x-2">
+                <div className="w-32 bg-gray-700 rounded-full h-3 flex overflow-hidden">
+                  <div 
+                    className="bg-red-400 transition-all duration-500"
+                    style={{ width: `${overUnderStats.underPercentage}%` }}
+                  ></div>
+                  <div 
+                    className="bg-yellow-400 transition-all duration-500"
+                    style={{ width: `${overUnderStats.equalPercentage}%` }}
+                  ></div>
+                  <div 
+                    className="bg-green-400 transition-all duration-500"
+                    style={{ width: `${overUnderStats.overPercentage}%` }}
+                  ></div>
+                </div>
+                <span className="text-xs text-gray-400">
+                  U:{overUnderStats.underPercentage.toFixed(1)}% | E:{overUnderStats.equalPercentage.toFixed(1)}% | O:{overUnderStats.overPercentage.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </>
-  );
+    );
+  };
 
   const renderMatchesTab = () => (
     <div className="space-y-6">

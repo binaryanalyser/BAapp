@@ -12,7 +12,7 @@ import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, T
 const TradingView: React.FC = () => {
   const { isAuthenticated, user, isLoading, accountList, switchAccount } = useAuth();
   const { isConnected, subscribeTo } = useWebSocket();
-  const { stats: tradingStats, trades, loadTradingHistory, syncWithDeriv, sellTrade, isLoading: tradesLoading } = useTradingContext();
+  const { stats: tradingStats, trades, loadTradingHistory, loadOpenTrades, syncWithDeriv, sellTrade, isLoading: tradesLoading } = useTradingContext();
   const [selectedAsset, setSelectedAsset] = useState('R_10');
   const [selectedSymbols] = useState(['R_10', 'R_25', 'R_50', 'R_75', 'R_100']);
   const [activeTradeCountdowns, setActiveTradeCountdowns] = useState<Record<string, number>>({});

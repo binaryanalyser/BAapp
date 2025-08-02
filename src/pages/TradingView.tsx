@@ -210,7 +210,7 @@ const TradingView: React.FC = () => {
               <select
                 value={user?.loginid || ''}
                 onChange={(e) => handleAccountSwitch(e.target.value)}
-                disabled={isSwitchingAccount || authLoading}
+                disabled={isSwitchingAccount || isLoading}
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {accountList.map((account) => {

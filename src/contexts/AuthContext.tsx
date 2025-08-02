@@ -177,55 +177,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       console.log('Switching to account:', loginid);
       
-      // Method 1: Try using 'switch' request
-      try {
-        const switchResponse = await derivAPI.sendRequest({
-          switch: loginid
-        });
-        
-        if (switchResponse.switch) {
-          console.log('Switch successful, re-authorizing...');
-          // Re-authorize to get updated account info
-          const authResponse = await derivAPI.authorize(token);
-          
-          if (authResponse.authorize) {
-            const userData: User = {
-              loginid: authResponse.authorize.loginid,
-              email: authResponse.authorize.email,
-              fullname: authResponse.authorize.fullname,
-              currency: authResponse.authorize.currency,
-              balance: authResponse.authorize.balance,
-              is_virtual: authResponse.authorize.is_virtual,
-              country: authResponse.authorize.country
-            };
-            
-            setUser(userData);
-            
-            // Update the account list with fresh balance data
-            if (authResponse.authorize.account_list) {
-              const updatedAccounts: AccountListItem[] = authResponse.authorize.account_list.map((account: any) => ({
-                loginid: account.loginid,
-                currency: account.currency,
-                is_virtual: account.is_virtual,
-                balance: account.balance,
-                email: account.email,
-                account_type: account.account_type,
-                broker: account.broker,
-                is_disabled: account.is_disabled,
-                landing_company_name: account.landing_company_name
-              }));
-              setAccountList(updatedAccounts);
-            }
-            
-            console.log('Successfully switched to account:', loginid);
-            return; // Success, exit early
-          }
-        }
-      } catch (switchError) {
-        console.log('Switch method failed, trying authorize with loginid...', switchError);
-      }
-      
-      // Method 2: Try authorize with loginid parameter
+      // Method 1: Try authorize with loginid parameter
       try {
         const response = await derivAPI.sendRequest({ 
           authorize: token,
@@ -268,7 +220,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('Authorize with loginid failed:', authorizeError);
       }
       
-      // Method 3: Manual account selection from stored account list
+      // Method 2: Manual account selection from stored account list
       if (accountList) {
         const targetAccount = accountList.find(acc => acc.loginid === loginid);
         if (targetAccount) {

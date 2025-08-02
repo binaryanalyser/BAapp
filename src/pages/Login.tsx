@@ -14,7 +14,7 @@ const Login: React.FC = () => {
   const handleDerivLogin = () => {
     // Store current URL for redirect after OAuth
     localStorage.setItem('oauth_redirect_url', window.location.origin + '/');
-    const redirectUri = `${window.location.origin}/oauth-callback`;
+    const redirectUri = 'https://binaryanalyser.com/oauth-callback';
     
     // Try multiple OAuth configurations
     const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=88454&l=EN&brand=deriv&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=read,trade`;

@@ -1095,7 +1095,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       ) : (
         <>
           {/* Price Chart */}
-          {/* <div className="mb-6">
+          <div className="mb-6">
             <h4 className="text-lg font-medium text-white mb-3">Price Movement</h4>
             <div className="h-48 bg-gray-750 rounded-lg p-2">
               {chartData.length > 0 ? (
@@ -1148,7 +1148,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
                 </div>
               )}
             </div>
-          </div> */}
+          </div>
 
           {/* Tab Content */}
           {renderTabContent()}

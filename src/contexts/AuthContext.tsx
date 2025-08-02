@@ -196,7 +196,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const login = useCallback(async (authToken: string) => {
-    await handleTokenLogin(authToken, 'token');
+    return handleTokenLogin(authToken, 'token');
   }, []);
 
   const logout = useCallback(() => {
@@ -216,12 +216,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const storedMethod = localStorage.getItem('deriv_login_method') as 'oauth' | 'token' | null;
     
     if (storedToken && storedMethod) {
-      handleTokenLogin(storedToken, storedMethod).catch((error) => {
+      const performAutoLogin = async () => {
+        try {
+          await handleTokenLogin(storedToken, storedMethod);
+        } catch (error) {
         console.error('Auto-login failed:', error);
         logout();
-      });
+        }
+      };
+      performAutoLogin();
     }
-  }, []);
+  }, [handleTokenLogin, logout]);
 
   const value: AuthContextType = {
     user,

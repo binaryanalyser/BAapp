@@ -50,23 +50,6 @@ const Analytics: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-3 mb-2">
-            <button
-              onClick={handleSyncWithDeriv}
-              disabled={isSyncing || tradesLoading}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            >
-              {isSyncing ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Syncing...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  <span>Sync Data</span>
-                </>
-              )}
-            </button>
           </div>
           <div className="flex items-center justify-between">
             <p className="text-gray-400">Detailed analysis of your trading performance and signal accuracy</p>

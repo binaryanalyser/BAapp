@@ -99,39 +99,4 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     // Add volatility factor
     if (volatility > 0.003) {
       confidence += 10;
-      reasoning += ' High volatility suggests potential breakout.';
-    }
-
-    setAnalysis({
-      trend,
-      strength: Math.abs(priceChange),
-      recommendation,
-      confidence: Math.round(Math.min(confidence, 95)),
-      reasoning
-    });
-
-    setIsAnalyzing(false);
-  };
-
-  const handleQuickTrade = (type: 'CALL' | 'PUT') => {
-    if (currentPrice === 0) return;
-
-    const newTrade = {
-      symbol: selectedSymbol,
-      type: type as 'CALL' | 'PUT',
-      stake: 10,
-      duration: 300, // 5 minutes
-      payout: 18.5,
-      profit: 0,
-      status: 'open' as const,
-      entryTime: Date.now(),
-      entryPrice: currentPrice
-    };
-
-    addTrade(newTrade);
-  };
-
-  const getTrendIcon = () => {
-    switch (analysis.trend) {
-      case 'bullish':
-        return <TrendingUp className="h-6 w
+      reason

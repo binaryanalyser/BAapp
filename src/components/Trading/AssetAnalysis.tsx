@@ -286,12 +286,12 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
   }, [priceHistory.length, currentSignal, isWaitingForNextAnalysis, isAnalyzing, startContinuousAnalysis, stopContinuousAnalysis]);
 
   // Clean up on unmount
-      return;
+  useEffect(() => {
     return () => {
       if (continuousAnalysisInterval) {
         clearInterval(continuousAnalysisInterval);
       }
-    }
+    };
   }, []);
 
   // Countdown timer for active signal
@@ -526,14 +526,18 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
             ) : (
               <Brain className="h-12 w-12 text-gray-400 mx-auto opacity-50" />
             )}
-                <span className="text-sm text-gray-400">
-                  {priceHistory.length >= 20 && !currentSignal && !isWaitingForNextAnalysis ? 'Scanning...' : 'Ready'}
-                </span>
+          </div>
+          <div className="mb-2">
+            <span className="text-sm text-gray-400">
+              {priceHistory.length >= 20 && !currentSignal && !isWaitingForNextAnalysis ? 'Scanning...' : 'Ready'}
+            </span>
+          </div>
           <h4 className="text-lg font-medium text-white mb-2">
             {isAnalyzing ? 'Analyzing Market Conditions' : 
              priceHistory.length < 20 ? 'Collecting Market Data' :
-             isWaitingForNextAnalysis && nextAnalysisCountdown > 0 ? 'Waiting for Next Analysis' : 'Ready for Analysis'}
+             isWaitingForNextAnalysis && nextAnalysisCountdown > 0 ? 'Waiting for Next Analysis' : 
              'Continuously Scanning for Signals'}
+          </h4>
           <p className="text-gray-400 text-sm">
             {isAnalyzing ? `Analyzing ${selectedSymbol} price patterns and indicators...` :
              priceHistory.length < 20 ? `Need ${20 - priceHistory.length} more price points` :

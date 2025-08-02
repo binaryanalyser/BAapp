@@ -9,7 +9,6 @@ const Header: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
-  const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
 
 
   const navigation = [
@@ -20,26 +19,6 @@ const Header: React.FC = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Update account balances when accountList changes
-  useEffect(() => {
-    if (accountList) {
-      const balances: Record<string, number> = {};
-      accountList.forEach(account => {
-        balances[account.loginid] = account.balance || 0;
-      });
-      setAccountBalances(balances);
-    }
-  }, [accountList]);
-
-  // Update current user's balance in the account list
-  useEffect(() => {
-    if (user && accountList) {
-      setAccountBalances(prev => ({
-        ...prev,
-        [user.loginid]: user.balance
-      }));
-    }
-  }, [user?.balance, user?.loginid, accountList]);
   const handleAccountSwitch = async (loginid: string) => {
     if (loginid === user?.loginid) {
       setIsAccountDropdownOpen(false);
@@ -72,18 +51,13 @@ const Header: React.FC = () => {
   }, []);
 
   // Get display balance for an account
-  const getAccountBalance = (account: any) => {
-    // Priority: local balance state > account data > 0
-    const localBalance = accountBalances[account.loginid];
-    const accountBalance = account.balance;
-    
-    // Use local balance if available and different from account balance (more recent)
-    if (localBalance !== undefined) {
-      return localBalance;
+  const getAccountBalance = (account: any): number => {
+    // If this is the current user, use their live balance
+    if (user && account.loginid === user.loginid) {
+      return user.balance;
     }
-    
-    // Fallback to account balance or 0
-    return accountBalance ?? 0;
+    // Otherwise use the account's stored balance
+    return account.balance ?? 0;
   };
 
   // Format balance for display
@@ -152,6 +126,7 @@ const Header: React.FC = () => {
                           {accountList.map((account) => {
                             const accountBalance = getAccountBalance(account);
                             const isCurrentAccount = account.loginid === user.loginid;
+                            const balanceDisplay = formatBalance(accountBalance, account.currency);
                             return (
                             <button
                               key={account.loginid}
@@ -167,24 +142,23 @@ const Header: React.FC = () => {
                                 <div>
                                   <div className="text-sm font-medium">{account.loginid}</div>
                                   <div className="text-xs text-gray-400">
-                                    {account.is_virtual ? 'Demo Account' : 'Real Account'} • {account.currency}
+                                    {account.is_virtual ? 'Demo Account' : 'Real Account'}
                                   </div>
-                                  {isCurrentAccount && (
-                                    <div className="text-xs bg-green-500 text-white px-2 py-1 rounded">
-                                      ACTIVE
-                                    </div>
-                                  )}
                                 </div>
                                 <div className="text-right">
                                   <div className="text-sm font-mono font-bold">
-                                    {formatBalance(accountBalance, account.currency)}
+                                    {balanceDisplay}
                                   </div>
                                   {isCurrentAccount && (
-                                    <div className="text-xs text-green-400 mt-1">Current</div>
+                                    <div className="text-xs bg-green-500 text-white px-2 py-1 rounded mt-1">
+                                      ACTIVE
+                                    </div>
                                   )}
-                                  <div className="text-xs text-gray-400 mt-1">
-                                    {account.is_virtual ? 'Demo' : 'Real'}
-                                  </div>
+                                  {!isCurrentAccount && (
+                                    <div className="text-xs text-gray-400 mt-1">
+                                      {account.currency}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </button>

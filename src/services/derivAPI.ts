@@ -270,14 +270,9 @@ class DerivAPI {
   }
 
   async getAccountBalance(loginid?: string): Promise<any> {
-    const request: any = { balance: 1 };
+    const request: any = { balance: 1, account: 'all' };
     if (loginid) {
-      // For getting balance of specific account, we need to authorize with that loginid
-      const token = this.getStoredToken();
-      return this.sendRequest({
-        authorize: token,
-        loginid: loginid
-      });
+      request.loginid = loginid;
     }
     return this.sendRequest(request);
   }
@@ -341,8 +336,13 @@ class DerivAPI {
   async switchAccount(loginid: string): Promise<any> {
     return this.sendRequest({ 
       authorize: this.getStoredToken(),
-      loginid: loginid 
+      loginid: loginid,
+      add_to_login_history: 1
     });
+  }
+
+  async sendRequest(request: any, timeout: number = 30000): Promise<any> {
+    return this.sendRequest(request, timeout);
   }
 
   private getStoredToken(): string {

@@ -47,6 +47,7 @@ interface AuthContextType {
   login: (token: string) => Promise<void>;
   logout: () => void;
   handleTokenLogin: (authToken: string, method?: 'oauth' | 'token') => Promise<void>;
+  switchAccount: (loginid: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -59,6 +60,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(false);
   const [accountList, setAccountList] = useState<AccountListItem[] | null>(null);
   const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
+
+  const switchAccount = useCallback(async (loginid: string) => {
+    if (!token || !accountList) {
+      throw new Error('No token or account list available');
+    }
+
+    const targetAccount = accountList.find(acc => acc.loginid === loginid);
+    if (!targetAccount) {
+      throw new Error('Account not found');
+    }
+
+    try {
+      setIsLoading(true);
+      
+      // Switch to the target account
+      const response = await derivAPI.switchAccount(loginid);
+      
+      if (response.authorize) {
+        const userData: User = {
+          loginid: response.authorize.loginid,
+          email: response.authorize.email,
+          fullname: response.authorize.fullname,
+          currency: response.authorize.currency,
+          balance: response.authorize.balance,
+          is_virtual: response.authorize.is_virtual,
+          country: response.authorize.country
+        };
+
+        setUser(userData);
+        
+        // Update the balance for this account
+        setAccountBalances(prev => ({
+          ...prev,
+          [loginid]: response.authorize.balance
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to switch account:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, accountList]);
 
   const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token' = 'token') => {
     try {
@@ -101,26 +145,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           landing_company_name: account.landing_company_name
         }));
 
-        const accountBalances: Record<string, number> = {};
+        const balances: Record<string, number> = {};
 
         for (const account of accounts) {
           try {
-            const res = await derivAPI.sendRequest({
+            const balanceResponse = await derivAPI.sendRequest({
               authorize: authToken,
               loginid: account.loginid
             });
 
-            if (res.authorize) {
-              account.balance = res.authorize.balance || 0;
-              accountBalances[account.loginid] = account.balance;
+            if (balanceResponse.authorize) {
+              account.balance = balanceResponse.authorize.balance || 0;
+              balances[account.loginid] = account.balance;
+            } else {
+              // Fallback: try to get balance directly
+              const directBalance = await derivAPI.getAccountBalance(account.loginid);
+              if (directBalance.balance) {
+                account.balance = directBalance.balance.balance || 0;
+                balances[account.loginid] = account.balance;
+              }
             }
           } catch (err) {
             console.warn(`Failed to fetch balance for ${account.loginid}`, err);
+            account.balance = 0;
+            balances[account.loginid] = 0;
           }
         }
 
         setAccountList(accounts);
-        setAccountBalances(accountBalances);
+        setAccountBalances(balances);
       } else if (method === 'token') {
         setAccountList(null);
         setAccountBalances({});
@@ -180,7 +233,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     accountBalances,
     login,
     logout,
-    handleTokenLogin
+    handleTokenLogin,
+    switchAccount
   };
 
   return (

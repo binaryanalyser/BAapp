@@ -11,25 +11,53 @@ const OAuthCallback: React.FC = () => {
   useEffect(() => {
     const handleOAuthCallback = async () => {
       try {
-        // Parse the URL hash for OAuth response
-        const hash = location.hash.substring(1);
-        const params = new URLSearchParams(hash);
+        console.log('OAuth callback - Full URL:', window.location.href);
+        console.log('OAuth callback - Hash:', window.location.hash);
+        console.log('OAuth callback - Search:', window.location.search);
         
-        // Get token and other parameters from hash
-        const token = params.get('token') || params.get('access_token');
-        const error = params.get('error');
-        const errorDescription = params.get('error_description');
-
-        console.log('OAuth callback received:', { token: token ? 'present' : 'missing', error, hash });
+        // Try to get token from hash first (OAuth 2.0 implicit flow)
+        let token = null;
+        let error = null;
+        let errorDescription = null;
+        
+        if (window.location.hash) {
+          const hash = window.location.hash.substring(1);
+          const hashParams = new URLSearchParams(hash);
+          token = hashParams.get('access_token') || hashParams.get('token');
+          error = hashParams.get('error');
+          errorDescription = hashParams.get('error_description');
+          console.log('Hash params:', { token: token ? 'present' : 'missing', error, errorDescription });
+        }
+        
+        // Fallback to query parameters
+        if (!token && !error) {
+          const searchParams = new URLSearchParams(window.location.search);
+          token = searchParams.get('access_token') || searchParams.get('token');
+          error = searchParams.get('error');
+          errorDescription = searchParams.get('error_description');
+          console.log('Search params:', { token: token ? 'present' : 'missing', error, errorDescription });
+        }
+        
+        // Additional fallback - check if there's any token-like parameter
+        if (!token && !error) {
+          const allParams = new URLSearchParams(window.location.hash.substring(1));
+          for (const [key, value] of allParams.entries()) {
+            console.log('Hash param:', key, '=', value);
+            if (key.includes('token') || key.includes('access')) {
+              token = value;
+              break;
+            }
+          }
+        }
 
         if (error) {
           console.error('OAuth error:', error, errorDescription);
-          navigate('/login?error=' + encodeURIComponent(errorDescription || error));
+          navigate('/login?error=' + encodeURIComponent(errorDescription || error), { replace: true });
           return;
         }
 
         if (token) {
-          console.log('Token received, attempting login...');
+          console.log('Token received, attempting login...', token.substring(0, 10) + '...');
           await login(token);
           console.log('Login successful, redirecting...');
           
@@ -39,7 +67,7 @@ const OAuthCallback: React.FC = () => {
           navigate(redirectUrl, { replace: true });
         } else {
           console.error('No token received in OAuth callback');
-          navigate('/login?error=' + encodeURIComponent('No authentication token received'));
+          navigate('/login?error=' + encodeURIComponent('No authentication token received. Please try again.'), { replace: true });
         }
       } catch (err) {
         console.error('OAuth callback error:', err);
@@ -48,7 +76,9 @@ const OAuthCallback: React.FC = () => {
       }
     };
 
-    handleOAuthCallback();
+    // Add a small delay to ensure the URL is fully loaded
+    const timer = setTimeout(handleOAuthCallback, 100);
+    return () => clearTimeout(timer);
   }, [location, login, navigate]);
 
   return (

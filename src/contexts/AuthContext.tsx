@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const handleTokenLogin = async (authToken: string) => {
     try {
       setIsLoading(true);
-      console.log('Starting authentication with token...');
+      console.log('Starting authentication with token...', authToken.substring(0, 10) + '...');
       
       // Ensure connection is established
       if (!derivAPI.getConnectionStatus()) {
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Authorize with the token
       console.log('Sending authorization request...');
       const response: AuthResponse = await derivAPI.authorize(authToken);
-      console.log('Authorization response received:', response);
+      console.log('Authorization response received:', response.authorize ? 'Success' : 'Failed');
       
       if (response.authorize) {
         const userData: User = {

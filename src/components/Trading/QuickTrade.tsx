@@ -166,30 +166,90 @@ const QuickTrade: React.FC<QuickTradeProps> = ({ selectedAsset = 'R_10' }) => {
     const tradeDuration = parseInt(duration) * 60; // Convert minutes to seconds
     
     try {
-      // Simulate trade execution for demo purposes
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newTrade = {
+      // Execute trade via Deriv API webhook
+      console.log('Executing trade via webhook:', {
         symbol: selectedAsset,
-        type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
-        stake: parseFloat(amount),
-        duration: tradeDuration,
-        payout: parseFloat(amount) * 1.85,
-        profit: 0,
-        status: 'open' as const,
-        entryTime,
-        entryPrice: currentPrice
-      };
-      
-      addTrade(newTrade);
-      setTradeSuccess(true);
-      setCountdown(parseInt(duration) * 60);
+        type: contractType,
+        amount: parseFloat(amount),
+        duration: parseInt(duration),
+        user: user.loginid
+      });
 
-      // Trade will automatically expire and be resolved by TradingContext
+      // Prepare contract parameters
+      const contractParams = {
+        contract_type: contractType,
+        symbol: selectedAsset,
+        duration: parseInt(duration),
+        duration_unit: 'm',
+        amount: parseFloat(amount),
+        basis: 'stake',
+        currency: user.currency || 'USD'
+      };
+
+      // Execute trade via Deriv API
+      const tradeResponse = await derivAPI.buyContract(contractParams);
+      
+      if (tradeResponse.buy) {
+        // Trade executed successfully via webhook
+        const contractId = tradeResponse.buy.contract_id.toString();
+        const actualPayout = tradeResponse.buy.payout;
+        const purchasePrice = tradeResponse.buy.buy_price;
+        
+        console.log('Trade executed successfully:', {
+          contractId,
+          payout: actualPayout,
+          purchasePrice
+        });
+
+        const newTrade = {
+          symbol: selectedAsset,
+          type: contractType as 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF',
+          stake: purchasePrice,
+          duration: tradeDuration,
+          payout: actualPayout,
+          profit: 0,
+          status: 'open' as const,
+          entryTime,
+          entryPrice: currentPrice,
+          contractId: contractId,
+          transactionId: tradeResponse.buy.transaction_id?.toString()
+        };
+        
+        addTrade(newTrade);
+        setTradeSuccess(true);
+        setCountdown(parseInt(duration) * 60);
+
+        // Show success notification
+        console.log('✅ Trade placed successfully:', {
+          symbol: selectedAsset,
+          type: contractType,
+          contractId,
+          stake: purchasePrice,
+          payout: actualPayout
+        });
+        
+      } else {
+        throw new Error('Trade execution failed - no buy response');
+      }
       
     } catch (error) {
       console.error('Trade execution error:', error);
-      alert(`Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to execute trade';
+      if (error instanceof Error) {
+        if (error.message.includes('InsufficientBalance')) {
+          errorMessage = 'Insufficient balance to place this trade';
+        } else if (error.message.includes('InvalidContract')) {
+          errorMessage = 'Invalid contract parameters';
+        } else if (error.message.includes('MarketClosed')) {
+          errorMessage = 'Market is currently closed';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      alert(`❌ ${errorMessage}`);
     } finally {
       setIsTrading(false);
     }

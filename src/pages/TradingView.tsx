@@ -215,11 +215,14 @@ const TradingView: React.FC = () => {
           </ErrorBoundary>
 
           {/* Asset Selection */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <AssetSelector 
               selectedAsset={selectedAsset}
               onAssetChange={setSelectedAsset}
             />
+            <div className="xl:col-span-2">
+              <QuickTrade selectedAsset={selectedAsset} />
+            </div>
           </div>
 
           {/* Trade History - Full Width Below */}

@@ -145,6 +145,13 @@ class DerivAPI {
       this.requestCallbacks.delete(data.req_id);
       
       if (data.error) {
+        // Handle "already subscribed" as success, not an error
+        if (data.error.message?.includes('already subscribed')) {
+          console.warn('Already subscribed:', data.error.message);
+          callback.resolve(data);
+          return;
+        }
+        
         const errorMessage = data.error.message || 'API Error';
         console.error('API Error Response:', data.error);
         callback.reject(new Error(errorMessage));

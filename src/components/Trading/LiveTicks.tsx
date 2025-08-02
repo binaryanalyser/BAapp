@@ -237,7 +237,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'MATCHES',
         confidence: Math.min(matchRate + 10, 85),
-        reasoning: `Strong match pattern. Next tick likely ${lastDigit}`,
+        reasoning: `Strong match pattern detected. Next tick likely matches ${lastDigit}.`,
         expectedDigit: lastDigit,
         color: 'text-green-400',
         icon: Target
@@ -258,7 +258,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'DIFFERS',
         confidence: Math.min((100 - matchRate) + 10, 85),
-        reasoning: `Strong differ pattern. Next tick less likely ${lastDigit}`,
+        reasoning: `Strong differ pattern. Next tick likely ${predictedDigit} (most frequent alternative).`,
         expectedDigit: predictedDigit,
         color: 'text-red-400',
         icon: Target
@@ -273,7 +273,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'EVEN',
         confidence: 65 + (recentOdds - 7) * 5,
-        reasoning: `Strong odd pattern. Next tick less likely odd`,
+        reasoning: `${recentOdds}/10 recent digits were odd. Expecting balance correction.`,
         color: 'text-blue-400',
         icon: TrendingUp
       });
@@ -281,7 +281,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'ODD',
         confidence: 65 + (recentEvens - 7) * 5,
-        reasoning: `Strong even pattern. Next tick less likely even`,
+        reasoning: `${recentEvens}/10 recent digits were even. Expecting balance correction.`,
         color: 'text-red-400',
         icon: TrendingDown
       });
@@ -296,7 +296,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'UNDER',
         confidence: 60 + (recentOvers - 6) * 3,
-        reasoning: `Strong over pattern. Next tick less likely over 5`,
+        reasoning: `${recentOvers}/10 recent digits over 5. Market correction expected.`,
         color: 'text-red-400',
         icon: TrendingDown
       });
@@ -304,7 +304,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'OVER',
         confidence: 60 + (recentUnders - 6) * 3,
-        reasoning: `Strong under pattern. Next tick less likely under 5`,
+        reasoning: `${recentUnders}/10 recent digits under 5. Upward movement expected.`,
         color: 'text-green-400',
         icon: TrendingUp
       });
@@ -319,7 +319,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
         predictions.push({
           type: 'DIFFERS',
           confidence: 70,
-          reasoning: `Cold digit pattern. Next tick less likely ${lastDigit}`,
+          reasoning: `Digit ${coldestDigit.digit} is overdue. Strong candidate for next tick.`,
           expectedDigit: coldestDigit.digit,
           color: 'text-yellow-400',
           icon: Brain
@@ -344,7 +344,7 @@ const LiveTicks: React.FC<LiveTicksProps> = ({ symbols }) => {
       predictions.push({
         type: 'DIFFERS',
         confidence: 75,
-        reasoning: `Pattern break signal. Next tick less likely ${last3[0]}`,
+        reasoning: `Three consecutive ${last3[0]}s. Break to ${breakDigit} expected.`,
         expectedDigit: breakDigit,
         color: 'text-orange-400',
         icon: AlertCircle

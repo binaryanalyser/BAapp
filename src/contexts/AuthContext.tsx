@@ -63,30 +63,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loginMethod, setLoginMethod] = useState<'oauth' | 'token' | null>(null);
   const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
 
+  // Connect to Deriv API on mount
   useEffect(() => {
     derivAPI.connect().catch(console.error);
   }, []);
 
-  useEffect(() => {
-    const savedToken = localStorage.getItem('deriv_token');
-    const savedLoginMethod = localStorage.getItem('deriv_login_method') as 'oauth' | 'token' | null;
-
-    const restoreSession = async () => {
-      if (savedToken) {
-        try {
-          await handleTokenLogin(savedToken, savedLoginMethod || 'token');
-        } catch (error) {
-          console.error('Failed to restore session:', error);
-          setIsLoading(false);
-        }
-      } else {
-        setIsLoading(false);
-      }
-    };
-
-    restoreSession();
-  }, []);
-
+  // Define handleTokenLogin function
   const handleTokenLogin = async (authToken: string, method: 'oauth' | 'token') => {
     try {
       setIsLoading(true);
@@ -146,6 +128,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(false);
     }
   };
+
+  // Auto-login effect - runs only once on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem('deriv_token');
+    const savedLoginMethod = localStorage.getItem('deriv_login_method') as 'oauth' | 'token' | null;
+
+    if (savedToken && savedLoginMethod) {
+      handleTokenLogin(savedToken, savedLoginMethod).catch(error => {
+        console.error('Failed to restore session:', error);
+        setIsLoading(false);
+      });
+    } else {
+      setIsLoading(false);
+    }
+  }, []); // Empty dependency array - runs only once
 
   const login = async (authToken: string) => {
     await handleTokenLogin(authToken, 'token');

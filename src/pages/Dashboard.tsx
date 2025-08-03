@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import LiveTicks from '../components/Trading/LiveTicks';
-import { User } from 'lucide-react';
+import SEOHead from '../components/SEO/SEOHead';
 
 const Dashboard: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
@@ -38,6 +38,12 @@ const Dashboard: React.FC = () => {
   }
 
   return (
+    <>
+      <SEOHead 
+        title="Dashboard - AI Binary Analyzer | Real-time Market Analysis"
+        description="Access your personalized trading dashboard with real-time market data, live ticks, and AI-powered analysis for binary options trading on Deriv platform."
+        url="https://binaryanalyser.com/"
+      />
     <div className="min-h-screen bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
@@ -52,6 +58,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

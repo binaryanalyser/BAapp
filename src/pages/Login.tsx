@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, BarChart3, ExternalLink, UserPlus } from 'lucide-react';
+import SEOHead from '../components/SEO/SEOHead';
 
 const Login: React.FC = () => {
   const [token, setToken] = useState('');
@@ -68,6 +69,12 @@ const Login: React.FC = () => {
   };
 
   return (
+    <>
+      <SEOHead 
+        title="Login - AI Binary Analyzer | Connect Your Deriv Account"
+        description="Securely connect your Deriv trading account to access AI-powered binary options analysis, real-time signals, and advanced trading analytics."
+        url="https://binaryanalyser.com/login"
+      />
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
@@ -198,6 +205,7 @@ const Login: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

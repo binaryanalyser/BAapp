@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from './contexts/AuthContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { TradingProvider } from './contexts/TradingContext';
@@ -34,6 +35,7 @@ const AppContent: React.FC = () => {
 
 function App() {
   return (
+    <HelmetProvider>
     <AuthProvider>
       <TradingProvider>
         <WebSocketProvider>
@@ -43,6 +45,7 @@ function App() {
         </WebSocketProvider>
       </TradingProvider>
     </AuthProvider>
+    </HelmetProvider>
   );
 }
 

@@ -8,6 +8,7 @@ import AssetAnalysis from '../components/Trading/AssetAnalysis';
 import AssetSelector from '../components/Trading/AssetSelector';
 import QuickTrade from '../components/Trading/QuickTrade';
 import { TrendingUp, TrendingDown, Activity, DollarSign, User, History, Clock, Target, Play, Pause, RefreshCw, Download, X } from 'lucide-react';
+import SEOHead from '../components/SEO/SEOHead';
 
 const TradingView: React.FC = () => {
   const { isAuthenticated, user, isLoading, accountList, switchAccount } = useAuth();
@@ -185,6 +186,12 @@ const TradingView: React.FC = () => {
   };
 
   return (
+    <>
+      <SEOHead 
+        title="AI Trading Signals - Binary Analyzer | Advanced Market Analysis"
+        description="Get real-time AI-powered trading signals, execute trades, and analyze market conditions with advanced algorithms for binary options on Deriv platform."
+        url="https://binaryanalyser.com/trading"
+      />
     <div className="min-h-screen bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
@@ -519,6 +526,7 @@ const TradingView: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

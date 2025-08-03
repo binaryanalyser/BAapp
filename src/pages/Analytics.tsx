@@ -7,6 +7,7 @@ import TradingStats from '../components/Analytics/TradingStats';
 import SignalAccuracy from '../components/Analytics/SignalAccuracy';
 import RiskMetrics from '../components/Analytics/RiskMetrics';
 import { User, RefreshCw, Download } from 'lucide-react';
+import SEOHead from '../components/SEO/SEOHead';
 
 const Analytics: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
@@ -45,6 +46,12 @@ const Analytics: React.FC = () => {
   }
 
   return (
+    <>
+      <SEOHead 
+        title="Trading Analytics - Binary Analyzer | Performance & Risk Analysis"
+        description="Comprehensive trading analytics with performance metrics, risk analysis, signal accuracy tracking, and detailed trading statistics for binary options."
+        url="https://binaryanalyser.com/analytics"
+      />
     <div className="min-h-screen bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
@@ -75,6 +82,7 @@ const Analytics: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

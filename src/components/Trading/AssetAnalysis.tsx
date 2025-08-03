@@ -206,7 +206,7 @@ const AssetAnalysis: React.FC<AssetAnalysisProps> = ({ selectedSymbol }) => {
     const priceChange = ((currentPrice - previousPrice) / previousPrice) * 100;
     
     // Determine expiry time based on strength
-    const expiryMinutes = strength === 'CRITICAL' ? 3 : strength === 'HIGH' ? 5 : 10;
+    const expiryMinutes = strength === 'CRITICAL' ? 5 : strength === 'HIGH' ? 10 : 15;
     
     return {
       symbol: asset.symbol,
